@@ -1,0 +1,148 @@
+export type Language = 'es' | 'ca' | 'en';
+export type UnitSystem = 'metric' | 'imperial';
+
+export const translations = {
+  es: {
+    settings: 'Ajustes',
+    language: 'Idioma',
+    units: 'Unidades',
+    radius: 'Radio de búsqueda',
+    metric: 'Métrico (km, m)',
+    imperial: 'Imperial (mi, ft)',
+    mapType: 'Tipo de mapa',
+    mapStandard: 'Estándar',
+    mapSatellite: 'Satélite',
+    mapTerrain: 'Terreno',
+    mapLight: 'Claro',
+    mapDark: 'Oscuro',
+    locating: 'Buscando tu ubicación...',
+    searching: 'Buscando fuentes cercanas...',
+    noFountains: 'No hay fuentes a menos de {radius}',
+    oasisYou: 'Oasis: Fuente a menos de 150m',
+    oasisPoint: 'Oasis: Fuente muy cerca del punto',
+    safeYou: 'Seguro: Tienes una fuente a {dist}',
+    safePoint: 'Seguro: Hay una fuente a {dist}',
+    cautionYou: 'Precaución: La fuente más cercana está a {dist}',
+    cautionPoint: 'Precaución: La fuente más cercana está a {dist}',
+    fountain: 'Fuente de Agua',
+    naturalSpring: 'Manantial Natural',
+    distanceM: '{dist} m',
+    distanceKm: '{dist} km',
+    distanceFt: '{dist} ft',
+    distanceMi: '{dist} mi',
+    navigate: 'Ir con Google Maps',
+    map: 'Mapa',
+    list: 'Lista',
+    backToLocation: 'Volver a mi ubicación',
+    noFountainsListTitle: 'Sin fuentes cercanas',
+    noFountainsListDesc: 'No hemos encontrado ninguna fuente de agua a menos de {radius} de {context}.',
+    listTitle: 'Fuentes cerca de {context}',
+    listContextYou: 'ti',
+    listContextPoint: 'la ubicación seleccionada',
+    close: 'Cerrar',
+    potableYes: 'Agua Potable',
+    potableNo: 'No Potable',
+    potableUnknown: 'Potabilidad Desconocida'
+  },
+  ca: {
+    settings: 'Ajustaments',
+    language: 'Idioma',
+    units: 'Unitats',
+    radius: 'Radi de cerca',
+    metric: 'Mètric (km, m)',
+    imperial: 'Imperial (mi, ft)',
+    mapType: 'Tipus de mapa',
+    mapStandard: 'Estàndard',
+    mapSatellite: 'Satèl·lit',
+    mapTerrain: 'Terreny',
+    mapLight: 'Clar',
+    mapDark: 'Fosc',
+    locating: 'Buscant la teva ubicació...',
+    searching: 'Buscant fonts properes...',
+    noFountains: 'No hi ha fonts a menys de {radius}',
+    oasisYou: 'Oasi: Font a menys de 150m',
+    oasisPoint: 'Oasi: Font molt a prop del punt',
+    safeYou: 'Segur: Tens una font a {dist}',
+    safePoint: 'Segur: Hi ha una font a {dist}',
+    cautionYou: 'Precaució: La font més propera és a {dist}',
+    cautionPoint: 'Precaució: La font més propera és a {dist}',
+    fountain: 'Font d\'Aigua',
+    naturalSpring: 'Font Natural',
+    distanceM: '{dist} m',
+    distanceKm: '{dist} km',
+    distanceFt: '{dist} ft',
+    distanceMi: '{dist} mi',
+    navigate: 'Anar amb Google Maps',
+    map: 'Mapa',
+    list: 'Llista',
+    backToLocation: 'Tornar a la meva ubicació',
+    noFountainsListTitle: 'Sense fonts properes',
+    noFountainsListDesc: 'No hem trobat cap font d\'aigua a menys de {radius} de {context}.',
+    listTitle: 'Fonts a prop de {context}',
+    listContextYou: 'tu',
+    listContextPoint: 'la ubicació seleccionada',
+    close: 'Tancar',
+    potableYes: 'Aigua Potable',
+    potableNo: 'No Potable',
+    potableUnknown: 'Potabilitat Desconeguda'
+  },
+  en: {
+    settings: 'Settings',
+    language: 'Language',
+    units: 'Units',
+    radius: 'Search radius',
+    metric: 'Metric (km, m)',
+    imperial: 'Imperial (mi, ft)',
+    mapType: 'Map type',
+    mapStandard: 'Standard',
+    mapSatellite: 'Satellite',
+    mapTerrain: 'Terrain',
+    mapLight: 'Light',
+    mapDark: 'Dark',
+    locating: 'Locating you...',
+    searching: 'Searching for nearby fountains...',
+    noFountains: 'No fountains within {radius}',
+    oasisYou: 'Oasis: Fountain within 150m',
+    oasisPoint: 'Oasis: Fountain very close to this point',
+    safeYou: 'Safe: Fountain is {dist} away',
+    safePoint: 'Safe: Fountain is {dist} away',
+    cautionYou: 'Caution: Nearest fountain is {dist} away',
+    cautionPoint: 'Caution: Nearest fountain is {dist} away',
+    fountain: 'Water Fountain',
+    naturalSpring: 'Natural Spring',
+    distanceM: '{dist} m',
+    distanceKm: '{dist} km',
+    distanceFt: '{dist} ft',
+    distanceMi: '{dist} mi',
+    navigate: 'Navigate with Google Maps',
+    map: 'Map',
+    list: 'List',
+    backToLocation: 'Back to my location',
+    noFountainsListTitle: 'No fountains nearby',
+    noFountainsListDesc: 'We couldn\'t find any water fountains within {radius} of {context}.',
+    listTitle: 'Fountains near {context}',
+    listContextYou: 'you',
+    listContextPoint: 'the selected location',
+    close: 'Close',
+    potableYes: 'Drinking Water',
+    potableNo: 'Not Drinkable',
+    potableUnknown: 'Unknown Potability'
+  }
+};
+
+export function formatDistance(distKm: number, unitSystem: UnitSystem, t: any) {
+  if (unitSystem === 'imperial') {
+    const distMi = distKm * 0.621371;
+    if (distMi < 0.1) {
+      const distFt = Math.round(distMi * 5280);
+      return t.distanceFt.replace('{dist}', distFt.toString());
+    }
+    return t.distanceMi.replace('{dist}', distMi.toFixed(1));
+  } else {
+    if (distKm < 1) {
+      const distM = Math.round(distKm * 1000);
+      return t.distanceM.replace('{dist}', distM.toString());
+    }
+    return t.distanceKm.replace('{dist}', distKm.toFixed(1));
+  }
+}

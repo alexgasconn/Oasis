@@ -1,0 +1,17 @@
+{
+  "name": "Oasis - Fuentes de Agua",
+  "short_name": "Oasis",
+  "description": "Encuentra fuentes de agua potable cerca de ti.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

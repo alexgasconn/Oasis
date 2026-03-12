@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+/* Native App Feel Resets */
+body {
+  /* Prevent pull-to-refresh on mobile browsers */
+  overscroll-behavior-y: none;
+  /* Prevent text selection to feel more like a native app */
+  user-select: none;
+  -webkit-user-select: none;
+  /* Remove tap highlight color on mobile */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Allow text selection only where it makes sense (inputs, textareas) */
+input, textarea {
+  user-select: auto;
+  -webkit-user-select: auto;
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.custom-div-icon {
+  background: transparent;
+  border: none;
+}
+
+.user-location-icon {
+  background: transparent;
+  border: none;
+}
