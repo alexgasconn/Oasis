@@ -17,12 +17,15 @@ function getBearing(lat1: number, lng1: number, lat2: number, lng2: number) {
 export function CompassWidget({
   userLocation,
   nearestFountain,
+  isActive,
+  onActivate
 }: {
   userLocation: { lat: number; lng: number } | null;
   nearestFountain: Fountain | null;
+  isActive: boolean;
+  onActivate: () => void;
 }) {
   const [heading, setHeading] = useState<number | null>(null);
-  const [permissionGranted, setPermissionGranted] = useState<boolean>(false);
   const [isSupported, setIsSupported] = useState<boolean>(true);
 
   const requestPermission = async () => {
@@ -31,7 +34,7 @@ export function CompassWidget({
       try {
         const permissionState = await (DeviceOrientationEvent as any).requestPermission();
         if (permissionState === 'granted') {
-          setPermissionGranted(true);
+          onActivate();
         } else {
           setIsSupported(false);
         }
@@ -41,12 +44,12 @@ export function CompassWidget({
       }
     } else {
       // Non-iOS 13+ devices
-      setPermissionGranted(true);
+      onActivate();
     }
   };
 
   useEffect(() => {
-    if (!permissionGranted) return;
+    if (!isActive) return;
 
     const handleOrientation = (e: any) => {
       let h = null;
@@ -70,7 +73,7 @@ export function CompassWidget({
       window.removeEventListener('deviceorientationabsolute', handleOrientation);
       window.removeEventListener('deviceorientation', handleOrientation);
     };
-  }, [permissionGranted]);
+  }, [isActive]);
 
   // Don't render if not supported or missing data
   if (!isSupported || !userLocation || !nearestFountain) return null;
@@ -83,7 +86,7 @@ export function CompassWidget({
   );
 
   // State 1: Needs permission
-  if (!permissionGranted) {
+  if (!isActive) {
     return (
       <button
         onClick={requestPermission}

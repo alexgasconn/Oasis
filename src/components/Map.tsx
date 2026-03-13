@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import 'leaflet-rotate';
 import { Fountain } from '../types';
 
 // ============================================================================
@@ -93,9 +94,10 @@ interface MapProps {
   onMapClick: (latlng: { lat: number; lng: number }) => void;
   mapType: string;
   mapCenterCommand: { lat: number; lng: number; ts: number } | null;
+  nearestFountain: Fountain | null;
 }
 
-export function MapView({ userLocation, customLocation, fountains, onFountainSelect, onMapClick, mapType, mapCenterCommand }: MapProps) {
+export function MapView({ userLocation, customLocation, fountains, onFountainSelect, onMapClick, mapType, mapCenterCommand, nearestFountain }: MapProps) {
   // Default to Madrid if no location is available yet
   const defaultCenter = { lat: 40.4168, lng: -3.7038 }; 
   const rawCenter = customLocation || userLocation || defaultCenter;
@@ -148,6 +150,11 @@ export function MapView({ userLocation, customLocation, fountains, onFountainSel
       zoom={15}
       style={{ height: '100%', width: '100%', zIndex: 0 }}
       zoomControl={false} // Disabled default zoom control for cleaner UI
+      rotate={true}
+      touchRotate={true}
+      rotateControl={{
+        closeOnZeroBearing: false
+      }}
     >
       <MapCenterController command={mapCenterCommand} />
       <MapClickHandler onMapClick={onMapClick} />
@@ -187,6 +194,22 @@ export function MapView({ userLocation, customLocation, fountains, onFountainSel
             })}
           />
         </>
+      )}
+
+      {/* Dashed line to nearest fountain */}
+      {nearestFountain && (
+        <Polyline 
+          positions={[
+            [center.lat, center.lng],
+            [nearestFountain.lat, nearestFountain.lng]
+          ]}
+          pathOptions={{
+            color: '#3b82f6',
+            weight: 3,
+            dashArray: '10, 10',
+            opacity: 0.7
+          }}
+        />
       )}
 
       {/* Water Fountain Markers */}

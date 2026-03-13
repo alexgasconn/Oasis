@@ -101,6 +101,7 @@ function AppContent() {
   // Map Control State
   const [hasInitialLocation, setHasInitialLocation] = useState(false);
   const [mapCenterCommand, setMapCenterCommand] = useState<{lat: number, lng: number, ts: number} | null>(null);
+  const [isCompassActive, setIsCompassActive] = useState(false);
   
   // User Preferences State (Persisted in localStorage)
   const [radiusKm, setRadiusKm] = useState<number>(() => {
@@ -248,6 +249,7 @@ function AppContent() {
             onMapClick={handleMapClick}
             mapType={mapType}
             mapCenterCommand={mapCenterCommand}
+            nearestFountain={isCompassActive ? nearestFountain : null}
           />
         ) : (
           <ListView 
@@ -267,6 +269,8 @@ function AppContent() {
           <CompassWidget 
             userLocation={userLocation} 
             nearestFountain={nearestFountain} 
+            isActive={isCompassActive}
+            onActivate={() => setIsCompassActive(true)}
           />
         )}
         {viewMode === 'map' && (
