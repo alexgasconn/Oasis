@@ -1,61 +1,95 @@
 import { Fountain } from '../types';
 
+// List of Overpass API mirrors to distribute load and handle rate limits
+const OVERPASS_MIRRORS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://lz4.overpass-api.de/api/interpreter',
+  'https://z.overpass-api.de/api/interpreter'
+];
+
+// Simple in-memory cache to avoid redundant calls
+const cache = new Map<string, { data: Fountain[], timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Fetches drinking water fountains from the OpenStreetMap Overpass API.
- * 
- * @param lat - Latitude of the center point
- * @param lng - Longitude of the center point
- * @param radius - Search radius in meters (default: 5000m / 5km)
- * @returns A promise that resolves to an array of Fountain objects
  */
 export async function fetchFountainsAround(lat: number, lng: number, radius: number = 5000): Promise<Fountain[]> {
-  // Overpass QL query to find nodes tagged with 'amenity=drinking_water' within the specified radius
-  // [out:json] specifies the response format
-  // [timeout:25] sets a 25-second timeout to prevent hanging requests
+  // Round coordinates to ~100m precision for caching keys
+  const cacheKey = `${lat.toFixed(3)}-${lng.toFixed(3)}-${radius}`;
+  const cached = cache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+
   const query = `
     [out:json][timeout:25];
-    node["amenity"="drinking_water"](around:${radius},${lat},${lng});
+    (
+      node["amenity"="drinking_water"](around:${radius},${lat},${lng});
+      node["amenity"="fountain"]["drinking_water"="yes"](around:${radius},${lat},${lng});
+      node["man_made"="water_tap"]["drinking_water"="yes"](around:${radius},${lat},${lng});
+    );
     out body;
   `;
   
-  const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
-  
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Overpass API error: ${response.status} ${response.statusText}`);
+  const encodedQuery = encodeURIComponent(query);
+  let lastError: any = null;
+
+  // Try different mirrors with a simple retry strategy
+  for (let attempt = 0; attempt < 3; attempt++) {
+    for (const mirror of OVERPASS_MIRRORS) {
+      try {
+        const url = `${mirror}?data=${encodedQuery}`;
+        const response = await fetch(url);
+        
+        if (response.status === 429) {
+          console.warn(`Mirror ${mirror} returned 429 (Too Many Requests). Trying next...`);
+          continue; // Try next mirror
+        }
+
+        if (!response.ok) {
+          throw new Error(`Overpass API error: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        const fountains: Fountain[] = data.elements.map((el: any) => {
+          let potable: 'yes' | 'no' | 'unknown' = 'unknown';
+          const tags = el.tags || {};
+          
+          if (tags.drinking_water === 'yes' || tags.potable === 'yes') potable = 'yes';
+          else if (tags.drinking_water === 'no' || tags.potable === 'no') potable = 'no';
+          else if (tags.amenity === 'drinking_water') potable = 'yes';
+
+          return {
+            id: el.id.toString(),
+            lat: el.lat,
+            lng: el.lon,
+            type: tags.natural === 'spring' ? 'natural' : 'urban',
+            potable: potable,
+            status: tags.operational_status === 'broken' ? 'broken' : 'working',
+            description: tags.description || tags.name || null,
+          };
+        });
+
+        // Store in cache
+        cache.set(cacheKey, { data: fountains, timestamp: Date.now() });
+        return fountains;
+
+      } catch (error) {
+        lastError = error;
+        console.warn(`Failed to fetch from ${mirror}:`, error);
+        // Continue to next mirror
+      }
     }
     
-    const data = await response.json();
-    
-    // Map the raw OSM elements to our internal Fountain interface
-    return data.elements.map((el: any) => {
-      // Determine potability based on explicit OSM tags
-      let potable: 'yes' | 'no' | 'unknown' = 'unknown';
-      if (el.tags?.drinking_water === 'yes') potable = 'yes';
-      if (el.tags?.drinking_water === 'no') potable = 'no';
-      
-      // Heuristic: If it's explicitly tagged as amenity=drinking_water, 
-      // it's generally safe to assume it's potable unless stated otherwise.
-      if (potable === 'unknown' && el.tags?.amenity === 'drinking_water') {
-        potable = 'yes';
-      }
-
-      return {
-        id: el.id.toString(),
-        lat: el.lat,
-        lng: el.lon,
-        // Check if it's a natural spring vs an urban fountain
-        type: el.tags?.natural === 'spring' ? 'natural' : 'urban',
-        potable: potable,
-        // Default assumption for OSM data unless tagged as broken
-        status: 'working', 
-      };
-    });
-  } catch (error) {
-    console.error("Error fetching from Overpass API:", error);
-    // Return empty array on failure so the app doesn't crash, 
-    // it will just show "No fountains found"
-    return [];
+    // If all mirrors failed, wait a bit before next attempt (exponential backoff)
+    if (attempt < 2) {
+      const waitTime = Math.pow(2, attempt) * 1000;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
   }
+
+  console.error("All Overpass API mirrors failed:", lastError);
+  return [];
 }

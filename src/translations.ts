@@ -42,7 +42,9 @@ export const translations = {
     close: 'Cerrar',
     potableYes: 'Agua Potable',
     potableNo: 'No Potable',
-    potableUnknown: 'Potabilidad Desconocida'
+    potableUnknown: 'Potabilidad Desconocida',
+    keepScreenOn: 'Mantener pantalla encendida',
+    gpsLock: 'Modo GPS (Seguir ubicación)'
   },
   ca: {
     settings: 'Ajustaments',
@@ -84,7 +86,9 @@ export const translations = {
     close: 'Tancar',
     potableYes: 'Aigua Potable',
     potableNo: 'No Potable',
-    potableUnknown: 'Potabilitat Desconeguda'
+    potableUnknown: 'Potabilitat Desconeguda',
+    keepScreenOn: 'Mantenir pantalla encesa',
+    gpsLock: 'Mode GPS (Seguir ubicació)'
   },
   en: {
     settings: 'Settings',
@@ -126,7 +130,9 @@ export const translations = {
     close: 'Close',
     potableYes: 'Drinking Water',
     potableNo: 'Not Drinkable',
-    potableUnknown: 'Unknown Potability'
+    potableUnknown: 'Unknown Potability',
+    keepScreenOn: 'Keep screen on',
+    gpsLock: 'GPS Mode (Follow location)'
   }
 };
 

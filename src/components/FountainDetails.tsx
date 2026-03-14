@@ -1,4 +1,4 @@
-import { X, Navigation } from 'lucide-react';
+import { X, Navigation, Share2 } from 'lucide-react';
 import { Fountain } from '../types';
 import { getDistanceFromLatLonInKm } from '../utils/distance';
 import { formatDistance, UnitSystem } from '../translations';
@@ -30,11 +30,38 @@ export function FountainDetails({ fountain, onClose, userLocation, t, unitSystem
   }
 
   /**
-   * Opens Google Maps directions to the selected fountain in a new tab.
+   * Opens directions to the selected fountain.
+   * Uses Apple Maps on iOS and Google Maps elsewhere.
    */
   const handleNavigate = () => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${fountain.lat},${fountain.lng}`;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const url = isIOS 
+      ? `maps://maps.apple.com/?daddr=${fountain.lat},${fountain.lng}`
+      : `https://www.google.com/maps/dir/?api=1&destination=${fountain.lat},${fountain.lng}`;
     window.open(url, '_blank');
+  };
+
+  /**
+   * Shares the fountain location using the Web Share API if available.
+   */
+  const handleShare = async () => {
+    const shareData = {
+      title: 'Water Fountain Location',
+      text: `Check out this water fountain I found!`,
+      url: `https://www.google.com/maps/search/?api=1&query=${fountain.lat},${fountain.lng}`
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.error('Error sharing:', err);
+      }
+    } else {
+      // Fallback: Copy to clipboard
+      navigator.clipboard.writeText(shareData.url);
+      alert('Link copied to clipboard!');
+    }
   };
 
   return (
@@ -76,14 +103,23 @@ export function FountainDetails({ fountain, onClose, userLocation, t, unitSystem
             </button>
           </div>
 
-          {/* Primary Action: Navigate Button */}
-          <button
-            onClick={handleNavigate}
-            className="w-full bg-blue-600 text-white py-4 rounded-2xl font-semibold text-xl flex items-center justify-center gap-3 hover:bg-blue-700 active:scale-[0.98] transition-all shadow-lg shadow-blue-600/20"
-          >
-            <Navigation className="w-6 h-6" />
-            {t.navigate}
-          </button>
+          {/* Primary Actions: Navigate and Share */}
+          <div className="flex gap-3">
+            <button
+              onClick={handleNavigate}
+              className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-semibold text-xl flex items-center justify-center gap-3 hover:bg-blue-700 active:scale-[0.98] transition-all shadow-lg shadow-blue-600/20"
+            >
+              <Navigation className="w-6 h-6" />
+              {t.navigate}
+            </button>
+            <button
+              onClick={handleShare}
+              className="p-4 bg-gray-100 text-gray-600 rounded-2xl hover:bg-gray-200 active:scale-[0.98] transition-all"
+              aria-label="Share fountain"
+            >
+              <Share2 className="w-6 h-6" />
+            </button>
+          </div>
         </div>
       </div>
     </>

@@ -1,14 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { MapView } from './components/Map';
 import { FountainDetails } from './components/FountainDetails';
 import { ListView } from './components/ListView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CompassWidget } from './components/CompassWidget';
-import { Droplets, AlertTriangle, CheckCircle, Loader2, LocateFixed, Settings, X } from 'lucide-react';
+import { Droplets, AlertTriangle, CheckCircle, Loader2, LocateFixed, Settings, X, Sun, Moon } from 'lucide-react';
 import { Fountain } from './types';
 import { getDistanceFromLatLonInKm } from './utils/distance';
-import { fetchFountainsAround } from './services/overpass';
 import { translations, Language, UnitSystem, formatDistance } from './translations';
+
+// Custom Hooks
+import { useGeolocation } from './hooks/useGeolocation';
+import { useFountains } from './hooks/useFountains';
+import { useDeviceOrientation } from './hooks/useDeviceOrientation';
+import { useWakeLock } from './hooks/useWakeLock';
 
 /**
  * HydrationIndicator Component
@@ -23,7 +28,9 @@ function HydrationIndicator({
   isLoading, 
   t, 
   unitSystem, 
-  radiusKm 
+  radiusKm,
+  isDismissed,
+  onDismiss
 }: { 
   targetLocation: { lat: number; lng: number } | null, 
   isCustom: boolean, 
@@ -32,8 +39,12 @@ function HydrationIndicator({
   isLoading: boolean, 
   t: any, 
   unitSystem: UnitSystem, 
-  radiusKm: number 
+  radiusKm: number,
+  isDismissed: boolean,
+  onDismiss: () => void
 }) {
+  if (isDismissed) return null;
+
   // State 1: Waiting for initial location
   if (!targetLocation) {
     return (
@@ -57,9 +68,14 @@ function HydrationIndicator({
   // State 3: No fountains found within the selected radius
   if (!nearestFountain || minDistance === null) {
     return (
-      <div className="absolute top-[calc(1rem+env(safe-area-inset-top))] left-4 right-4 z-[1000] bg-red-500 text-white p-4 rounded-2xl shadow-lg text-center font-medium flex items-center justify-center gap-2">
-        <AlertTriangle className="w-5 h-5" />
-        {t.noFountains.replace('{radius}', formatDistance(radiusKm, unitSystem, t))}
+      <div className="absolute top-[calc(1rem+env(safe-area-inset-top))] left-4 right-4 z-[1000] bg-red-500 text-white p-4 rounded-2xl shadow-lg text-center font-medium flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-1 justify-center">
+          <AlertTriangle className="w-5 h-5" />
+          {t.noFountains.replace('{radius}', formatDistance(radiusKm, unitSystem, t))}
+        </div>
+        <button onClick={onDismiss} className="p-1 hover:bg-white/20 rounded-full transition-colors">
+          <X className="w-5 h-5" />
+        </button>
       </div>
     );
   }
@@ -77,9 +93,14 @@ function HydrationIndicator({
   }
 
   return (
-    <div className={`absolute top-[calc(1rem+env(safe-area-inset-top))] left-4 right-4 z-[1000] ${statusConfig.color} text-white p-4 rounded-2xl shadow-lg flex items-center gap-3 transition-colors`}>
-      {statusConfig.icon}
-      <span className="font-semibold text-lg">{statusConfig.text}</span>
+    <div className={`absolute top-[calc(1rem+env(safe-area-inset-top))] left-4 right-4 z-[1000] ${statusConfig.color} text-white p-4 rounded-2xl shadow-lg flex items-center justify-between gap-3 transition-colors`}>
+      <div className="flex items-center gap-3">
+        {statusConfig.icon}
+        <span className="font-semibold text-lg">{statusConfig.text}</span>
+      </div>
+      <button onClick={onDismiss} className="p-1 hover:bg-white/20 rounded-full transition-colors">
+        <X className="w-5 h-5" />
+      </button>
     </div>
   );
 }
@@ -89,39 +110,57 @@ function HydrationIndicator({
  * Manages state for location, fountains, settings, and view modes.
  */
 function AppContent() {
-  // Location and Data State
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [customLocation, setCustomLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [fountains, setFountains] = useState<Fountain[]>([]);
-  const [selectedFountain, setSelectedFountain] = useState<Fountain | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  // Settings State (Persisted)
+  const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('language') as Language) || 'en');
+  const [unitSystem, setUnitSystem] = useState<UnitSystem>(() => (localStorage.getItem('unitSystem') as UnitSystem) || 'metric');
+  const [radiusKm, setRadiusKm] = useState<number>(() => Number(localStorage.getItem('radiusKm')) || 2);
+  const [mapType, setMapType] = useState<'standard' | 'satellite' | 'terrain' | 'light' | 'dark'>(() => (localStorage.getItem('mapType') as any) || 'standard');
+  const [isWakeLockActive, setIsWakeLockActive] = useState(true);
+
+  // UI State
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
-  const [lastFetchedLocation, setLastFetchedLocation] = useState<{ lat: number; lng: number } | null>(null);
-  
-  // Map Control State
-  const [hasInitialLocation, setHasInitialLocation] = useState(false);
-  const [mapCenterCommand, setMapCenterCommand] = useState<{lat: number, lng: number, ts: number} | null>(null);
-  const [isCompassActive, setIsCompassActive] = useState(false);
-  
-  // User Preferences State (Persisted in localStorage)
-  const [radiusKm, setRadiusKm] = useState<number>(() => {
-    const saved = localStorage.getItem('radiusKm');
-    return saved !== null ? Number(saved) : 1; // Default to 1km for better performance
-  });
-  const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('language') as Language) || 'en'); // Default to English
-  const [unitSystem, setUnitSystem] = useState<UnitSystem>(() => (localStorage.getItem('unitSystem') as UnitSystem) || 'metric'); // Default to metric
-  const [mapType, setMapType] = useState<string>(() => localStorage.getItem('mapType') || 'light'); // Default to light map
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [selectedFountain, setSelectedFountain] = useState<Fountain | null>(null);
+  const [isCompassActive, setIsCompassActive] = useState(false);
+  const [isIndicatorDismissed, setIsIndicatorDismissed] = useState(false);
+  const [customLocation, setCustomLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Custom Hooks for Logic
+  const [isFollowModeActive, setIsFollowModeActive] = useState(true);
+  const { userLocation, hasInitialLocation, mapCenterCommand, setMapCenterCommand } = useGeolocation(isFollowModeActive);
+  
+  const targetLocation = customLocation || userLocation;
+  const { fountains, isLoading } = useFountains(targetLocation, radiusKm);
+  
+  const deviceHeading = useDeviceOrientation(isCompassActive);
+  useWakeLock(isWakeLockActive);
 
   const t = translations[language];
-  const targetLocation = customLocation || userLocation;
 
-  // Calculate nearest fountain for indicators and compass
-  const distances = targetLocation ? fountains.map(f => getDistanceFromLatLonInKm(targetLocation.lat, targetLocation.lng, f.lat, f.lng)) : [];
-  const minDistance = distances.length > 0 ? Math.min(...distances) : null;
-  const nearestFountain = minDistance !== null ? fountains[distances.indexOf(minDistance)] : null;
+  // Calculate nearest fountain for the indicator and compass
+  const { minDistance, nearestFountain } = useMemo(() => {
+    if (!targetLocation || fountains.length === 0) return { minDistance: null, nearestFountain: null };
+    
+    let min = Infinity;
+    let nearest = null;
+    
+    for (const f of fountains) {
+      const d = getDistanceFromLatLonInKm(targetLocation.lat, targetLocation.lng, f.lat, f.lng);
+      if (d < min) {
+        min = d;
+        nearest = f;
+      }
+    }
+    
+    return { minDistance: min, nearestFountain: nearest };
+  }, [targetLocation, fountains]);
 
-  // Effect: Persist settings whenever they change
+  // Reset indicator dismissal when location changes significantly
+  useEffect(() => {
+    setIsIndicatorDismissed(false);
+  }, [targetLocation?.lat, targetLocation?.lng]);
+
+  // Persist settings
   useEffect(() => {
     localStorage.setItem('language', language);
     localStorage.setItem('unitSystem', unitSystem);
@@ -129,99 +168,19 @@ function AppContent() {
     localStorage.setItem('mapType', mapType);
   }, [language, unitSystem, radiusKm, mapType]);
 
-  // Effect: Initialize geolocation tracking
-  useEffect(() => {
-    if (navigator.geolocation) {
-      const watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          const newLoc = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          };
-          setUserLocation(newLoc);
-          
-          // Center map only on first location acquisition to prevent fighting user pan
-          setHasInitialLocation(prev => {
-            if (!prev) {
-              setMapCenterCommand({ ...newLoc, ts: Date.now() });
-              return true;
-            }
-            return prev;
-          });
-        },
-        (error) => {
-          console.error("Error getting location:", error);
-          setUserLocation(prev => {
-            if (!prev) {
-              // Fallback to Madrid if location access is denied or fails
-              const fallback = { lat: 40.4168, lng: -3.7038 };
-              setMapCenterCommand({ ...fallback, ts: Date.now() });
-              return fallback;
-            }
-            return prev;
-          });
-          setHasInitialLocation(true);
-        },
-        { enableHighAccuracy: true }
-      );
-      
-      return () => navigator.geolocation.clearWatch(watchId);
-    }
-  }, []);
-
-  // Effect: Reset the last fetched location when the search radius changes
-  // This forces a new API call to fetch data for the new radius
-  useEffect(() => {
-    setLastFetchedLocation(null);
-  }, [radiusKm]);
-
-  // Effect: Fetch fountains data when the target location changes significantly
-  useEffect(() => {
-    if (!targetLocation) return;
-
-    // Calculate distance from the center of the last API fetch
-    const distFromLastFetch = lastFetchedLocation
-      ? getDistanceFromLatLonInKm(targetLocation.lat, targetLocation.lng, lastFetchedLocation.lat, lastFetchedLocation.lng)
-      : Infinity;
-
-    // Only fetch if we moved more than half the radius from the last fetch center
-    // This prevents spamming the Overpass API on every small movement
-    if (distFromLastFetch > (radiusKm / 2)) {
-      const fetchFountains = async () => {
-        setIsLoading(true);
-        try {
-          const data = await fetchFountainsAround(targetLocation.lat, targetLocation.lng, radiusKm * 1000);
-          setFountains(data);
-          setLastFetchedLocation(targetLocation);
-        } catch (error) {
-          console.error("Failed to fetch fountains", error);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-
-      // Debounce the fetch to avoid rapid consecutive calls
-      const timeoutId = setTimeout(() => {
-        fetchFountains();
-      }, 500);
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [targetLocation, lastFetchedLocation, radiusKm]);
-
-  // Handler: Set a custom location when the user clicks on the map
   const handleMapClick = useCallback((latlng: { lat: number; lng: number }) => {
     setCustomLocation(latlng);
+    setIsFollowModeActive(false);
     setMapCenterCommand({ ...latlng, ts: Date.now() });
-  }, []);
+  }, [setMapCenterCommand]);
 
-  // Handler: Re-center map on user's actual location
   const handleLocateMe = useCallback(() => {
     setCustomLocation(null);
+    setIsFollowModeActive(true);
     if (userLocation) {
-      setMapCenterCommand({ lat: userLocation.lat, lng: userLocation.lng, ts: Date.now() });
+      setMapCenterCommand({ ...userLocation, ts: Date.now() });
     }
-  }, [userLocation]);
+  }, [userLocation, setMapCenterCommand]);
 
   return (
     <div className="h-[100dvh] w-full relative overflow-hidden bg-gray-50">
@@ -236,6 +195,8 @@ function AppContent() {
         t={t}
         unitSystem={unitSystem}
         radiusKm={radiusKm}
+        isDismissed={isIndicatorDismissed}
+        onDismiss={() => setIsIndicatorDismissed(true)}
       />
 
       {/* Main Content Area: Map or List View */}
@@ -250,6 +211,8 @@ function AppContent() {
             mapType={mapType}
             mapCenterCommand={mapCenterCommand}
             nearestFountain={isCompassActive ? nearestFountain : null}
+            isFollowMode={isFollowModeActive}
+            heading={deviceHeading}
           />
         ) : (
           <ListView 
@@ -266,21 +229,15 @@ function AppContent() {
       {/* Floating Controls (Bottom Right) */}
       <div className="absolute bottom-[calc(6rem+env(safe-area-inset-bottom))] right-4 z-[1000] flex flex-col gap-3">
         {viewMode === 'map' && (
-          <CompassWidget 
-            userLocation={userLocation} 
-            nearestFountain={nearestFountain} 
-            isActive={isCompassActive}
-            onActivate={() => setIsCompassActive(true)}
-          />
-        )}
-        {viewMode === 'map' && (
-          <button 
-            onClick={handleLocateMe} 
-            className={`p-3 rounded-full shadow-lg transition-colors border border-gray-100 ${customLocation ? 'bg-white text-blue-600 hover:bg-blue-50' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
-            aria-label={t.backToLocation}
-          >
-            <LocateFixed className="w-6 h-6" />
-          </button>
+          <>
+            <button 
+              onClick={handleLocateMe} 
+              className={`p-3 rounded-full shadow-lg transition-colors border border-gray-100 ${isFollowModeActive ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white text-blue-600 hover:bg-blue-50'}`}
+              aria-label={t.backToLocation}
+            >
+              <LocateFixed className="w-6 h-6" />
+            </button>
+          </>
         )}
         <button
           onClick={() => setIsSettingsOpen(true)}
@@ -290,6 +247,19 @@ function AppContent() {
           <Settings className="w-5 h-5" />
         </button>
       </div>
+
+      {/* Compass Widget (Bottom Left) */}
+      {viewMode === 'map' && (
+        <div className="absolute bottom-[calc(6rem+env(safe-area-inset-bottom))] left-4 z-[1000]">
+          <CompassWidget 
+            userLocation={userLocation} 
+            nearestFountain={nearestFountain} 
+            isActive={isCompassActive}
+            onActivate={() => setIsCompassActive(true)}
+            heading={deviceHeading}
+          />
+        </div>
+      )}
 
       {/* View Toggle (Map / List) */}
       <div className="absolute bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-[1000] bg-white p-1.5 rounded-full shadow-lg flex items-center border border-gray-100">
@@ -367,13 +337,24 @@ function AppContent() {
                 {/* Map Type Selector */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.mapType}</label>
-                  <select value={mapType} onChange={e => setMapType(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-700">
+                  <select value={mapType} onChange={e => setMapType(e.target.value as any)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-700">
                     <option value="standard">{t.mapStandard}</option>
                     <option value="satellite">{t.mapSatellite}</option>
                     <option value="terrain">{t.mapTerrain}</option>
                     <option value="light">{t.mapLight}</option>
                     <option value="dark">{t.mapDark}</option>
                   </select>
+                </div>
+
+                {/* Wake Lock Toggle */}
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-sm font-medium text-gray-700">{t.keepScreenOn}</span>
+                  <button 
+                    onClick={() => setIsWakeLockActive(!isWakeLockActive)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isWakeLockActive ? 'bg-blue-600' : 'bg-gray-200'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isWakeLockActive ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
                 </div>
               </div>
 

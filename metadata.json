@@ -1,5 +1,5 @@
 {
   "name": "Oasis",
   "description": "Find and verify nearby water fountains for runners, cyclists, and travelers.",
-  "requestFramePermissions": ["geolocation"]
+  "requestFramePermissions": ["geolocation", "screen-wake-lock"]
 }

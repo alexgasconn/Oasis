@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet';
+import { useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents, AttributionControl } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import 'leaflet-rotate';
@@ -59,13 +59,21 @@ const getIconForFountain = (fountain: Fountain) => {
  * A utility component that flies the map to a specific location when commanded.
  * This prevents the map from fighting the user's manual panning.
  */
-function MapCenterController({ command }: { command: { lat: number; lng: number; ts: number } | null }) {
+function MapCenterController({ command, isFollowMode }: { command: { lat: number; lng: number; ts: number } | null, isFollowMode: boolean }) {
   const map = useMap();
   useEffect(() => {
-    if (command && typeof command.lat === 'number' && !isNaN(command.lat) && typeof command.lng === 'number' && !isNaN(command.lng)) {
-      map.flyTo([command.lat, command.lng], 15, { duration: 0.8 });
+    if (command && 
+        typeof command.lat === 'number' && !isNaN(command.lat) && isFinite(command.lat) &&
+        typeof command.lng === 'number' && !isNaN(command.lng) && isFinite(command.lng)) {
+      // If in follow mode, use a faster animation for real-time feel
+      const duration = isFollowMode ? 0.3 : 0.8;
+      const zoom = map.getZoom();
+      // Ensure zoom is also valid
+      if (typeof zoom === 'number' && !isNaN(zoom)) {
+        map.flyTo([command.lat, command.lng], zoom, { duration });
+      }
     }
-  }, [command, map]);
+  }, [command, map, isFollowMode]);
   return null;
 }
 
@@ -95,16 +103,40 @@ interface MapProps {
   mapType: string;
   mapCenterCommand: { lat: number; lng: number; ts: number } | null;
   nearestFountain: Fountain | null;
+  isFollowMode: boolean;
+  heading: number | null;
 }
 
-export function MapView({ userLocation, customLocation, fountains, onFountainSelect, onMapClick, mapType, mapCenterCommand, nearestFountain }: MapProps) {
+export function MapView({ 
+  userLocation, 
+  customLocation, 
+  fountains, 
+  onFountainSelect, 
+  onMapClick, 
+  mapType, 
+  mapCenterCommand, 
+  nearestFountain, 
+  isFollowMode,
+  heading 
+}: MapProps) {
   // Default to Madrid if no location is available yet
   const defaultCenter = { lat: 40.4168, lng: -3.7038 }; 
   const rawCenter = customLocation || userLocation || defaultCenter;
   
   // Ensure we never pass NaN to Leaflet
-  const isValidLatLng = (lat: any, lng: any) => typeof lat === 'number' && !isNaN(lat) && typeof lng === 'number' && !isNaN(lng);
+  const isValidLatLng = (lat: any, lng: any) => 
+    typeof lat === 'number' && !isNaN(lat) && isFinite(lat) &&
+    typeof lng === 'number' && !isNaN(lng) && isFinite(lng);
+
   const center = isValidLatLng(rawCenter.lat, rawCenter.lng) ? rawCenter : defaultCenter;
+
+  const polylinePositions = useMemo(() => {
+    if (!nearestFountain) return null;
+    return [
+      [center.lat, center.lng] as [number, number],
+      [nearestFountain.lat, nearestFountain.lng] as [number, number]
+    ];
+  }, [center.lat, center.lng, nearestFountain]);
 
   /**
    * Returns the appropriate tile layer URL based on the selected map type.
@@ -150,13 +182,17 @@ export function MapView({ userLocation, customLocation, fountains, onFountainSel
       zoom={15}
       style={{ height: '100%', width: '100%', zIndex: 0 }}
       zoomControl={false} // Disabled default zoom control for cleaner UI
-      rotate={true}
-      touchRotate={true}
-      rotateControl={{
-        closeOnZeroBearing: false
-      }}
+      attributionControl={false}
+      {...({
+        rotate: true,
+        touchRotate: true,
+        rotateControl: {
+          closeOnZeroBearing: false
+        }
+      } as any)}
     >
-      <MapCenterController command={mapCenterCommand} />
+      <AttributionControl position="bottomright" />
+      <MapCenterController command={mapCenterCommand} isFollowMode={isFollowMode} />
       <MapClickHandler onMapClick={onMapClick} />
       
       {/* Base Map Layer */}
@@ -166,23 +202,32 @@ export function MapView({ userLocation, customLocation, fountains, onFountainSel
         url={getMapUrl()}
       />
       
-      {/* User's Current Location Marker (Blue dot) */}
-      {userLocation && (
+      {/* User's Current Location Marker (Google Maps style) */}
+      {userLocation && isValidLatLng(userLocation.lat, userLocation.lng) && (
         <>
           <Marker 
             position={[userLocation.lat, userLocation.lng]}
             icon={new L.DivIcon({
               className: 'user-location-icon',
-              html: `<div style="background-color: #3b82f6; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);"></div>`,
-              iconSize: [16, 16],
-              iconAnchor: [8, 8],
+              html: `
+                <div style="position: relative; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                  ${heading !== null ? `
+                    <div style="position: absolute; width: 60px; height: 60px; transform: rotate(${heading}deg); transition: transform 0.1s linear;">
+                      <div style="width: 100%; height: 100%; background: radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.4) 0%, rgba(59, 130, 246, 0) 70%); clip-path: polygon(50% 50%, 20% 0%, 80% 0%);"></div>
+                    </div>
+                  ` : ''}
+                  <div style="position: relative; width: 18px; height: 18px; background-color: #3b82f6; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.2); z-index: 2;"></div>
+                </div>
+              `,
+              iconSize: [40, 40],
+              iconAnchor: [20, 20],
             })}
           />
         </>
       )}
 
       {/* Custom Selected Location Marker (Purple dot) */}
-      {customLocation && (
+      {customLocation && isValidLatLng(customLocation.lat, customLocation.lng) && (
         <>
           <Marker 
             position={[customLocation.lat, customLocation.lng]}
@@ -197,12 +242,9 @@ export function MapView({ userLocation, customLocation, fountains, onFountainSel
       )}
 
       {/* Dashed line to nearest fountain */}
-      {nearestFountain && (
+      {polylinePositions && (
         <Polyline 
-          positions={[
-            [center.lat, center.lng],
-            [nearestFountain.lat, nearestFountain.lng]
-          ]}
+          positions={polylinePositions}
           pathOptions={{
             color: '#3b82f6',
             weight: 3,
