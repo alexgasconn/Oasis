@@ -137,6 +137,14 @@ function AppContent() {
 
   const t = translations[language];
 
+  const handleFountainSelect = useCallback((fountain: Fountain) => {
+    setSelectedFountain(fountain);
+  }, []);
+
+  const handleViewModeChange = (mode: 'map' | 'list') => {
+    setViewMode(mode);
+  };
+
   // Calculate nearest fountain for the indicator and compass
   const { minDistance, nearestFountain } = useMemo(() => {
     if (!targetLocation || fountains.length === 0) return { minDistance: null, nearestFountain: null };
@@ -155,10 +163,20 @@ function AppContent() {
     return { minDistance: min, nearestFountain: nearest };
   }, [targetLocation, fountains]);
 
-  // Reset indicator dismissal when location changes significantly
+  // Auto-reset the indicator every 5 minutes if it was dismissed,
+  // or immediately if the user selects a new custom location.
   useEffect(() => {
     setIsIndicatorDismissed(false);
-  }, [targetLocation?.lat, targetLocation?.lng]);
+  }, [customLocation]);
+
+  useEffect(() => {
+    if (isIndicatorDismissed) {
+      const timer = setTimeout(() => {
+        setIsIndicatorDismissed(false);
+      }, 5 * 60 * 1000); // 5 minutes
+      return () => clearTimeout(timer);
+    }
+  }, [isIndicatorDismissed]);
 
   // Persist settings
   useEffect(() => {
@@ -206,7 +224,7 @@ function AppContent() {
             userLocation={userLocation} 
             customLocation={customLocation}
             fountains={fountains} 
-            onFountainSelect={setSelectedFountain} 
+            onFountainSelect={handleFountainSelect} 
             onMapClick={handleMapClick}
             mapType={mapType}
             mapCenterCommand={mapCenterCommand}
@@ -255,7 +273,7 @@ function AppContent() {
             userLocation={userLocation} 
             nearestFountain={nearestFountain} 
             isActive={isCompassActive}
-            onActivate={() => setIsCompassActive(true)}
+            onActivate={() => setIsCompassActive(prev => !prev)}
             heading={deviceHeading}
           />
         </div>
@@ -264,13 +282,13 @@ function AppContent() {
       {/* View Toggle (Map / List) */}
       <div className="absolute bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-[1000] bg-white p-1.5 rounded-full shadow-lg flex items-center border border-gray-100">
         <button
-          onClick={() => setViewMode('map')}
+          onClick={() => handleViewModeChange('map')}
           className={`px-6 py-2.5 rounded-full font-semibold transition-colors ${viewMode === 'map' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-gray-500 hover:text-gray-900'}`}
         >
           {t.map}
         </button>
         <button
-          onClick={() => setViewMode('list')}
+          onClick={() => handleViewModeChange('list')}
           className={`px-6 py-2.5 rounded-full font-semibold transition-colors ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-gray-500 hover:text-gray-900'}`}
         >
           {t.list}

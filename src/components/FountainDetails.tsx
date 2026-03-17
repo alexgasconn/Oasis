@@ -68,12 +68,12 @@ export function FountainDetails({ fountain, onClose, userLocation, t, unitSystem
     <>
       {/* Backdrop overlay - clicking it closes the details sheet */}
       <div 
-        className="absolute inset-0 bg-black/20 backdrop-blur-sm z-[999] transition-opacity"
+        className="absolute inset-0 bg-black/20 backdrop-blur-sm z-[999] animate-fade-in"
         onClick={onClose}
       />
       
       {/* Bottom Sheet Container */}
-      <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.12)] z-[1000] transition-transform transform translate-y-0">
+      <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.12)] z-[1000] animate-slide-up">
         <div className="p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
           
           {/* Drag Handle (Visual indicator only, not functional for dragging yet) */}

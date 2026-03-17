@@ -180,6 +180,7 @@ export function MapView({
     <MapContainer
       center={[center.lat, center.lng]}
       zoom={15}
+      preferCanvas={true}
       style={{ height: '100%', width: '100%', zIndex: 0 }}
       zoomControl={false} // Disabled default zoom control for cleaner UI
       attributionControl={false}
