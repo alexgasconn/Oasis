@@ -217,6 +217,25 @@ function AppContent() {
         onDismiss={() => setIsIndicatorDismissed(true)}
       />
 
+      {/* Clear Custom Location Button */}
+      {customLocation && (
+        <div className={`absolute left-1/2 -translate-x-1/2 z-[1000] transition-all duration-300 ${isIndicatorDismissed ? 'top-[calc(1rem+env(safe-area-inset-top))]' : 'top-[calc(5.5rem+env(safe-area-inset-top))]'}`}>
+          <button
+            onClick={() => {
+              setCustomLocation(null);
+              setIsFollowModeActive(true);
+              if (userLocation) {
+                setMapCenterCommand({ ...userLocation, ts: Date.now() });
+              }
+            }}
+            className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-md text-gray-700 font-medium border border-gray-200 flex items-center gap-2 hover:bg-gray-50 transition-colors"
+          >
+            <X className="w-4 h-4" />
+            {t.clearPin}
+          </button>
+        </div>
+      )}
+
       {/* Main Content Area: Map or List View */}
       <div className="h-full w-full">
         {viewMode === 'map' ? (

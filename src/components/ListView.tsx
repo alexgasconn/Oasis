@@ -1,6 +1,6 @@
 import { Fountain } from '../types';
 import { getDistanceFromLatLonInKm } from '../utils/distance';
-import { Navigation, Droplets, MapPin } from 'lucide-react';
+import { Navigation, Droplets, MapPin, Footprints } from 'lucide-react';
 import { formatDistance, UnitSystem } from '../translations';
 import { PotabilityBadge } from './PotabilityBadge';
 
@@ -11,6 +11,16 @@ interface Props {
   t: any; // Translation object
   unitSystem: UnitSystem;
   radiusKm: number;
+}
+
+function getDistanceStyle(distanceKm: number) {
+  if (distanceKm <= 0.5) {
+    return "bg-indigo-100 text-indigo-800 border-indigo-200"; // Close
+  } else if (distanceKm <= 1.5) {
+    return "bg-indigo-50 text-indigo-600 border-indigo-100"; // Medium
+  } else {
+    return "bg-slate-100 text-slate-600 border-slate-200"; // Far
+  }
 }
 
 /**
@@ -74,13 +84,14 @@ export function ListView({ fountains, targetLocation, isCustomLocation, t, unitS
               </div>
               
               {/* Fountain Details */}
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 items-start">
                 <h3 className="font-bold text-gray-900 text-lg leading-tight">
                   {f.type === 'natural' ? t.naturalSpring : t.fountain}
                 </h3>
-                <p className="text-gray-500 font-medium">
+                <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${getDistanceStyle(f.distance)}`}>
+                  <Footprints className="w-3.5 h-3.5" />
                   {formatDistance(f.distance, unitSystem, t)}
-                </p>
+                </div>
                 <div className="mt-1">
                   <PotabilityBadge fountain={f} t={t} />
                 </div>

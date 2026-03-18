@@ -104,19 +104,24 @@ export function CompassWidget({
   // State 2: Waiting for sensor data
   if (heading === null) {
     return (
-      <div className="bg-white p-3 rounded-full shadow-lg border border-gray-100 flex items-center justify-center opacity-50" title="Calibrando brújula...">
+      <button 
+        onClick={onActivate}
+        className="bg-white p-3 rounded-full shadow-lg border border-gray-100 flex items-center justify-center opacity-50 hover:bg-gray-50 transition-colors" 
+        title="Calibrando brújula... (Toca para desactivar)"
+      >
         <Compass className="w-6 h-6 text-gray-400 animate-pulse" />
-      </div>
+      </button>
     );
   }
 
   return (
-    <div 
+    <button 
+      onClick={onActivate}
       className={clsx(
-        "bg-white rounded-full shadow-2xl border-2 transition-all duration-500 flex items-center justify-center relative overflow-hidden",
+        "bg-white rounded-full shadow-2xl border-2 transition-all duration-500 flex items-center justify-center relative overflow-hidden hover:bg-gray-50",
         isActive ? "p-5 border-blue-500 scale-125" : "p-3 border-gray-100"
       )}
-      title="Dirección a la fuente más cercana"
+      title="Dirección a la fuente más cercana (Toca para desactivar)"
     >
       {isActive && (
         <>
@@ -145,6 +150,6 @@ export function CompassWidget({
           <span className="text-[8px] font-bold text-blue-600 mt-0.5">OBJ</span>
         </div>
       )}
-    </div>
+    </button>
   );
 }

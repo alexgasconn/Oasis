@@ -65,12 +65,16 @@ function MapCenterController({ command, isFollowMode }: { command: { lat: number
     if (command && 
         typeof command.lat === 'number' && !isNaN(command.lat) && isFinite(command.lat) &&
         typeof command.lng === 'number' && !isNaN(command.lng) && isFinite(command.lng)) {
-      // If in follow mode, use a faster animation for real-time feel
-      const duration = isFollowMode ? 0.3 : 0.8;
-      const zoom = map.getZoom();
-      // Ensure zoom is also valid
-      if (typeof zoom === 'number' && !isNaN(zoom)) {
-        map.flyTo([command.lat, command.lng], zoom, { duration });
+      try {
+        // If in follow mode, use a faster animation for real-time feel
+        const duration = isFollowMode ? 0.3 : 0.8;
+        const zoom = map.getZoom();
+        // Ensure zoom is also valid
+        if (typeof zoom === 'number' && !isNaN(zoom)) {
+          map.flyTo([command.lat, command.lng], zoom, { duration });
+        }
+      } catch (e) {
+        console.warn('MapCenterController failed to flyTo:', e);
       }
     }
   }, [command, map, isFollowMode]);
@@ -131,7 +135,7 @@ export function MapView({
   const center = isValidLatLng(rawCenter.lat, rawCenter.lng) ? rawCenter : defaultCenter;
 
   const polylinePositions = useMemo(() => {
-    if (!nearestFountain) return null;
+    if (!nearestFountain || !isValidLatLng(nearestFountain.lat, nearestFountain.lng)) return null;
     return [
       [center.lat, center.lng] as [number, number],
       [nearestFountain.lat, nearestFountain.lng] as [number, number]
@@ -256,16 +260,19 @@ export function MapView({
       )}
 
       {/* Water Fountain Markers */}
-      {fountains.map((fountain) => (
-        <Marker
-          key={fountain.id}
-          position={[fountain.lat, fountain.lng]}
-          icon={getIconForFountain(fountain)}
-          eventHandlers={{
-            click: () => onFountainSelect(fountain),
-          }}
-        />
-      ))}
+      {fountains.map((fountain) => {
+        if (!isValidLatLng(fountain.lat, fountain.lng)) return null;
+        return (
+          <Marker
+            key={fountain.id}
+            position={[fountain.lat, fountain.lng]}
+            icon={getIconForFountain(fountain)}
+            eventHandlers={{
+              click: () => onFountainSelect(fountain),
+            }}
+          />
+        );
+      })}
     </MapContainer>
   );
 }

@@ -44,7 +44,8 @@ export const translations = {
     potableNo: 'No Potable',
     potableUnknown: 'Potabilidad Desconocida',
     keepScreenOn: 'Mantener pantalla encendida',
-    gpsLock: 'Modo GPS (Seguir ubicación)'
+    gpsLock: 'Modo GPS (Seguir ubicación)',
+    clearPin: 'Quitar ubicación'
   },
   ca: {
     settings: 'Ajustaments',
@@ -88,7 +89,8 @@ export const translations = {
     potableNo: 'No Potable',
     potableUnknown: 'Potabilitat Desconeguda',
     keepScreenOn: 'Mantenir pantalla encesa',
-    gpsLock: 'Mode GPS (Seguir ubicació)'
+    gpsLock: 'Mode GPS (Seguir ubicació)',
+    clearPin: 'Treure ubicació'
   },
   en: {
     settings: 'Settings',
@@ -132,7 +134,8 @@ export const translations = {
     potableNo: 'Not Drinkable',
     potableUnknown: 'Unknown Potability',
     keepScreenOn: 'Keep screen on',
-    gpsLock: 'GPS Mode (Follow location)'
+    gpsLock: 'GPS Mode (Follow location)',
+    clearPin: 'Clear pin'
   }
 };
 
