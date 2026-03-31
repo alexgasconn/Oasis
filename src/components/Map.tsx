@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents, AttributionControl } from 'react-leaflet';
+import { createPortal } from 'react-dom';
+import { MapContainer, TileLayer, Marker, Circle, Polyline, useMap, useMapEvents, AttributionControl } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import 'leaflet-rotate';
@@ -22,23 +23,41 @@ L.Icon.Default.mergeOptions({
 // ============================================================================
 /**
  * Creates a custom HTML-based icon for the map markers.
- * @param color The hex color code for the marker.
+ * Uses a 44px outer touch target (WCAG / Android standard) with a prominent
+ * colored inner circle to be easily distinguishable at a glance.
+ * @param color The hex color code for the marker fill.
+ * @param innerSize The pixel size of the visible inner dot.
  */
-const createIcon = (color: string) => {
+const createIcon = (color: string, innerSize = 28) => {
+  const outer = 48;
   return new L.DivIcon({
     className: 'custom-div-icon',
-    html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10], // Centers the icon over the coordinate
+    html: `
+      <div style="
+        width: ${outer}px; height: ${outer}px;
+        display: flex; align-items: center; justify-content: center;
+      ">
+        <div style="
+          background-color: ${color};
+          width: ${innerSize}px; height: ${innerSize}px;
+          border-radius: 50%;
+          border: 3px solid white;
+          box-shadow: 0 3px 10px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.2);
+        "></div>
+      </div>
+    `,
+    iconSize: [outer, outer],
+    iconAnchor: [outer / 2, outer / 2],
+    popupAnchor: [0, -(outer / 2)],
   });
 };
 
 // Pre-defined icons for different types of water sources
 const icons = {
-  potable: createIcon('#10b981'), // emerald-500 (Safe to drink)
-  unknown: createIcon('#f59e0b'), // amber-500 (Unknown status)
-  notPotable: createIcon('#ef4444'), // red-500 (Not safe to drink)
-  natural: createIcon('#3b82f6'), // blue-500 (Natural spring)
+  potable: createIcon('#10b981'), // emerald-500  (Safe to drink)
+  unknown: createIcon('#f59e0b'), // amber-500    (Unknown status)
+  notPotable: createIcon('#ef4444'), // red-500      (Not safe to drink)
+  natural: createIcon('#3b82f6'), // blue-500     (Natural spring)
 };
 
 /**
@@ -56,15 +75,61 @@ const getIconForFountain = (fountain: Fountain) => {
 // ============================================================================
 
 /**
+ * Zoom +/- buttons portalled into the map container.
+ * Using createPortal ensures they remain inside the map's coordinate space
+ * while still being positioned with absolute CSS over the tiles.
+ * 48×48dp matches Android's minimum recommended touch target size.
+ */
+function ZoomControls() {
+  const map = useMap();
+  const container = map.getContainer();
+
+  return createPortal(
+    <div
+      style={{
+        position: 'absolute',
+        bottom: 'calc(14rem + env(safe-area-inset-bottom))',
+        right: '1rem',
+        zIndex: 1000,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        pointerEvents: 'all',
+      }}
+    >
+      <button
+        onTouchStart={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); map.zoomIn(); navigator.vibrate?.(10); }}
+        style={{ width: 48, height: 48 }}
+        className="bg-white rounded-2xl shadow-lg flex items-center justify-center text-gray-800 text-2xl font-light border border-gray-100 active:scale-90 active:bg-gray-50 transition-transform"
+        aria-label="Zoom in"
+      >
+        +
+      </button>
+      <button
+        onTouchStart={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); map.zoomOut(); navigator.vibrate?.(10); }}
+        style={{ width: 48, height: 48 }}
+        className="bg-white rounded-2xl shadow-lg flex items-center justify-center text-gray-800 text-2xl font-light border border-gray-100 active:scale-90 active:bg-gray-50 transition-transform"
+        aria-label="Zoom out"
+      >
+        −
+      </button>
+    </div>,
+    container
+  );
+}
+
+/**
  * A utility component that flies the map to a specific location when commanded.
  * This prevents the map from fighting the user's manual panning.
  */
 function MapCenterController({ command, isFollowMode }: { command: { lat: number; lng: number; ts: number } | null, isFollowMode: boolean }) {
   const map = useMap();
   useEffect(() => {
-    if (command && 
-        typeof command.lat === 'number' && !isNaN(command.lat) && isFinite(command.lat) &&
-        typeof command.lng === 'number' && !isNaN(command.lng) && isFinite(command.lng)) {
+    if (command &&
+      typeof command.lat === 'number' && !isNaN(command.lat) && isFinite(command.lat) &&
+      typeof command.lng === 'number' && !isNaN(command.lng) && isFinite(command.lng)) {
       try {
         // If in follow mode, use a faster animation for real-time feel
         const duration = isFollowMode ? 0.3 : 0.8;
@@ -111,24 +176,24 @@ interface MapProps {
   heading: number | null;
 }
 
-export function MapView({ 
-  userLocation, 
-  customLocation, 
-  fountains, 
-  onFountainSelect, 
-  onMapClick, 
-  mapType, 
-  mapCenterCommand, 
-  nearestFountain, 
+export function MapView({
+  userLocation,
+  customLocation,
+  fountains,
+  onFountainSelect,
+  onMapClick,
+  mapType,
+  mapCenterCommand,
+  nearestFountain,
   isFollowMode,
-  heading 
+  heading
 }: MapProps) {
   // Default to Madrid if no location is available yet
-  const defaultCenter = { lat: 40.4168, lng: -3.7038 }; 
+  const defaultCenter = { lat: 40.4168, lng: -3.7038 };
   const rawCenter = customLocation || userLocation || defaultCenter;
-  
+
   // Ensure we never pass NaN to Leaflet
-  const isValidLatLng = (lat: any, lng: any) => 
+  const isValidLatLng = (lat: any, lng: any) =>
     typeof lat === 'number' && !isNaN(lat) && isFinite(lat) &&
     typeof lng === 'number' && !isNaN(lng) && isFinite(lng);
 
@@ -199,33 +264,48 @@ export function MapView({
       <AttributionControl position="bottomright" />
       <MapCenterController command={mapCenterCommand} isFollowMode={isFollowMode} />
       <MapClickHandler onMapClick={onMapClick} />
-      
+      <ZoomControls />
+
       {/* Base Map Layer */}
       <TileLayer
         key={mapType} // Force re-render when mapType changes
         attribution={getMapAttribution()}
         url={getMapUrl()}
       />
-      
-      {/* User's Current Location Marker (Google Maps style) */}
+
+      {/* User's Current Location Marker – Google Maps style with heading cone */}
       {userLocation && isValidLatLng(userLocation.lat, userLocation.lng) && (
         <>
-          <Marker 
+          {/* GPS accuracy ring – subtle blue circle shows positional uncertainty */}
+          <Circle
+            center={[userLocation.lat, userLocation.lng]}
+            radius={30}
+            pathOptions={{
+              color: '#3b82f6',
+              fillColor: '#3b82f6',
+              fillOpacity: 0.08,
+              weight: 1,
+              opacity: 0.3,
+            }}
+          />
+          <Marker
             position={[userLocation.lat, userLocation.lng]}
             icon={new L.DivIcon({
               className: 'user-location-icon',
               html: `
-                <div style="position: relative; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                <div style="position:relative;width:56px;height:56px;display:flex;align-items:center;justify-content:center;">
                   ${heading !== null ? `
-                    <div style="position: absolute; width: 60px; height: 60px; transform: rotate(${heading}deg); transition: transform 0.1s linear;">
-                      <div style="width: 100%; height: 100%; background: radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.4) 0%, rgba(59, 130, 246, 0) 70%); clip-path: polygon(50% 50%, 20% 0%, 80% 0%);"></div>
+                    <div style="position:absolute;width:72px;height:72px;transform:rotate(${heading}deg);transition:transform 0.15s linear;">
+                      <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
+                        <path d="M36 36 L22 10 Q36 2 50 10 Z" fill="rgba(59,130,246,0.35)" />
+                      </svg>
                     </div>
                   ` : ''}
-                  <div style="position: relative; width: 18px; height: 18px; background-color: #3b82f6; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.2); z-index: 2;"></div>
+                  <div class="user-pulse" style="position:relative;width:22px;height:22px;background:#3b82f6;border-radius:50%;border:3px solid white;box-shadow:0 2px 10px rgba(59,130,246,0.5);z-index:2;"></div>
                 </div>
               `,
-              iconSize: [40, 40],
-              iconAnchor: [20, 20],
+              iconSize: [56, 56],
+              iconAnchor: [28, 28],
             })}
           />
         </>
@@ -234,7 +314,7 @@ export function MapView({
       {/* Custom Selected Location Marker (Purple dot) */}
       {customLocation && isValidLatLng(customLocation.lat, customLocation.lng) && (
         <>
-          <Marker 
+          <Marker
             position={[customLocation.lat, customLocation.lng]}
             icon={new L.DivIcon({
               className: 'custom-location-icon',
@@ -248,7 +328,7 @@ export function MapView({
 
       {/* Dashed line to nearest fountain */}
       {polylinePositions && (
-        <Polyline 
+        <Polyline
           positions={polylinePositions}
           pathOptions={{
             color: '#3b82f6',

@@ -45,7 +45,10 @@ export const translations = {
     potableUnknown: 'Potabilidad Desconocida',
     keepScreenOn: 'Mantener pantalla encendida',
     gpsLock: 'Modo GPS (Seguir ubicación)',
-    clearPin: 'Quitar ubicación'
+    clearPin: 'Quitar ubicación',
+    walkingTimeLabel: 'Caminando aprox.',
+    offline: 'Sin conexión · mostrando datos en caché',
+    fountainsCount: '{n} fuentes'
   },
   ca: {
     settings: 'Ajustaments',
@@ -90,7 +93,10 @@ export const translations = {
     potableUnknown: 'Potabilitat Desconeguda',
     keepScreenOn: 'Mantenir pantalla encesa',
     gpsLock: 'Mode GPS (Seguir ubicació)',
-    clearPin: 'Treure ubicació'
+    clearPin: 'Treure ubicació',
+    walkingTimeLabel: 'Caminant aprox.',
+    offline: 'Sense connexió · mostrant dades en memòria',
+    fountainsCount: '{n} fonts'
   },
   en: {
     settings: 'Settings',
@@ -135,7 +141,10 @@ export const translations = {
     potableUnknown: 'Unknown Potability',
     keepScreenOn: 'Keep screen on',
     gpsLock: 'GPS Mode (Follow location)',
-    clearPin: 'Clear pin'
+    clearPin: 'Clear pin',
+    walkingTimeLabel: 'Walking approx.',
+    offline: 'Offline · showing cached data',
+    fountainsCount: '{n} fountains'
   }
 };
 

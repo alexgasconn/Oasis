@@ -16,6 +16,12 @@ function getBearing(lat1: number, lng1: number, lat2: number, lng2: number) {
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
 
+/** Converts a bearing in degrees to a compass direction label. */
+function bearingToCardinal(deg: number): string {
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
 export function CompassWidget({
   userLocation,
   nearestFountain,
@@ -32,123 +38,99 @@ export function CompassWidget({
   const [isSupported, setIsSupported] = useState<boolean>(true);
   const prevRotationRef = useRef<number>(0);
   const absoluteRotationRef = useRef<number>(0);
+  const [bearingDeg, setBearingDeg] = useState<number | null>(null);
 
-  // Spring for smooth movement
-  const springRotation = useSpring(0, {
-    stiffness: 100,
-    damping: 20,
-    mass: 1
-  });
+  const springRotation = useSpring(0, { stiffness: 80, damping: 18, mass: 1 });
 
   const requestPermission = async () => {
-    // iOS 13+ requires permission for DeviceOrientation
     if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
       try {
-        const permissionState = await (DeviceOrientationEvent as any).requestPermission();
-        if (permissionState === 'granted') {
-          onActivate();
-        } else {
-          setIsSupported(false);
-        }
-      } catch (error) {
-        console.error('Error requesting orientation permission:', error);
+        const state = await (DeviceOrientationEvent as any).requestPermission();
+        if (state === 'granted') onActivate();
+        else setIsSupported(false);
+      } catch {
         setIsSupported(false);
       }
     } else {
-      // Non-iOS 13+ devices
       onActivate();
     }
   };
 
-  // Update spring when rotation changes, handling shortest path
   useEffect(() => {
     if (heading !== null && userLocation && nearestFountain) {
-      const bearing = getBearing(
-        userLocation.lat,
-        userLocation.lng,
-        nearestFountain.lat,
-        nearestFountain.lng
-      );
-      
+      const bearing = getBearing(userLocation.lat, userLocation.lng, nearestFountain.lat, nearestFountain.lng);
+      setBearingDeg(bearing);
       const targetRotation = (bearing - heading + 360) % 360;
-      
-      // Shortest path logic
+
       let diff = targetRotation - prevRotationRef.current;
       if (diff > 180) diff -= 360;
       if (diff < -180) diff += 360;
-      
+
       absoluteRotationRef.current += diff;
       prevRotationRef.current = targetRotation;
-      
       springRotation.set(absoluteRotationRef.current);
     }
   }, [heading, userLocation, nearestFountain, springRotation]);
 
-  // Don't render if not supported or missing data
   if (!isSupported || !userLocation || !nearestFountain) return null;
 
-  // State 1: Needs permission
+  // Inactive – small tap-to-activate button
   if (!isActive) {
     return (
       <button
         onClick={requestPermission}
-        className="bg-white p-3 rounded-full shadow-lg text-blue-600 hover:bg-blue-50 transition-colors border border-gray-100 flex items-center justify-center"
+        style={{ width: 52, height: 52 }}
+        className="bg-white rounded-full shadow-lg text-blue-600 border border-gray-100 flex items-center justify-center active:scale-90 transition-all"
         aria-label="Activar brújula"
-        title="Activar brújula hacia la fuente más cercana"
       >
         <Compass className="w-6 h-6" />
       </button>
     );
   }
 
-  // State 2: Waiting for sensor data
+  // Waiting for sensor data
   if (heading === null) {
     return (
-      <button 
+      <button
         onClick={onActivate}
-        className="bg-white p-3 rounded-full shadow-lg border border-gray-100 flex items-center justify-center opacity-50 hover:bg-gray-50 transition-colors" 
-        title="Calibrando brújula... (Toca para desactivar)"
+        style={{ width: 52, height: 52 }}
+        className="bg-white rounded-full shadow-lg border border-gray-100 flex items-center justify-center opacity-60 active:scale-90 transition-all"
       >
         <Compass className="w-6 h-6 text-gray-400 animate-pulse" />
       </button>
     );
   }
 
+  const cardinal = bearingDeg !== null ? bearingToCardinal(bearingDeg) : '';
+
   return (
-    <button 
+    <button
       onClick={onActivate}
       className={clsx(
-        "bg-white rounded-full shadow-2xl border-2 transition-all duration-500 flex items-center justify-center relative overflow-hidden hover:bg-gray-50",
-        isActive ? "p-5 border-blue-500 scale-125" : "p-3 border-gray-100"
+        'relative rounded-full shadow-2xl border-2 bg-white flex flex-col items-center justify-center transition-all duration-300 active:scale-90',
+        'border-blue-500'
       )}
-      title="Dirección a la fuente más cercana (Toca para desactivar)"
+      style={{ width: 72, height: 72 }}
+      aria-label="Brújula activa – toca para desactivar"
     >
-      {isActive && (
-        <>
-          <div className="absolute inset-0 bg-blue-500/5 animate-pulse"></div>
-          {/* Compass ticks */}
-          <div className="absolute inset-1 border border-dashed border-blue-200 rounded-full opacity-50"></div>
-        </>
-      )}
+      {/* Subtle pulsing ring */}
+      <div className="absolute inset-0 rounded-full border border-blue-300 animate-ping opacity-20 pointer-events-none" />
+      {/* Dashed orbit */}
+      <div className="absolute inset-1.5 rounded-full border border-dashed border-blue-200 opacity-50 pointer-events-none" />
+
+      {/* Animated needle */}
       <motion.div
         style={{ rotate: springRotation }}
-        className="flex items-center justify-center z-10"
+        className="flex items-center justify-center"
       >
-        <Navigation 
-          className={clsx(
-            "transition-colors duration-300",
-            isActive ? "w-10 h-10 text-blue-600 drop-shadow-md" : "w-6 h-6 text-gray-400"
-          )} 
-          fill={isActive ? "currentColor" : "none"}
-        />
+        <Navigation className="w-9 h-9 text-blue-600 drop-shadow-md" fill="currentColor" />
       </motion.div>
-      
-      {/* North indicator when active */}
-      {isActive && (
-        <div className="absolute top-1 left-1/2 -translate-x-1/2 flex flex-col items-center">
-          <div className="w-1.5 h-1.5 bg-blue-600 rounded-full shadow-sm"></div>
-          <span className="text-[8px] font-bold text-blue-600 mt-0.5">OBJ</span>
-        </div>
+
+      {/* Cardinal direction label */}
+      {cardinal && (
+        <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 text-[9px] font-extrabold text-blue-600 leading-none">
+          {cardinal}
+        </span>
       )}
     </button>
   );

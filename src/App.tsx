@@ -4,7 +4,7 @@ import { FountainDetails } from './components/FountainDetails';
 import { ListView } from './components/ListView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CompassWidget } from './components/CompassWidget';
-import { Droplets, AlertTriangle, CheckCircle, Loader2, LocateFixed, Settings, X, Sun, Moon } from 'lucide-react';
+import { Droplets, AlertTriangle, CheckCircle, Loader2, LocateFixed, Settings, X, WifiOff } from 'lucide-react';
 import { Fountain } from './types';
 import { getDistanceFromLatLonInKm } from './utils/distance';
 import { translations, Language, UnitSystem, formatDistance } from './translations';
@@ -14,41 +14,50 @@ import { useGeolocation } from './hooks/useGeolocation';
 import { useFountains } from './hooks/useFountains';
 import { useDeviceOrientation } from './hooks/useDeviceOrientation';
 import { useWakeLock } from './hooks/useWakeLock';
+import { useHaptics } from './hooks/useHaptics';
+import { useNetworkStatus } from './hooks/useNetworkStatus';
 
 /**
  * HydrationIndicator Component
  * Displays a dynamic status bar at the top of the screen indicating the proximity
  * and availability of water fountains based on the user's or selected location.
  */
-function HydrationIndicator({ 
-  targetLocation, 
-  isCustom, 
+function HydrationIndicator({
+  targetLocation,
+  isCustom,
   nearestFountain,
   minDistance,
-  isLoading, 
-  t, 
-  unitSystem, 
+  isLoading,
+  t,
+  unitSystem,
   radiusKm,
   isDismissed,
-  onDismiss
-}: { 
-  targetLocation: { lat: number; lng: number } | null, 
-  isCustom: boolean, 
+  onDismiss,
+  offlinePad
+}: {
+  targetLocation: { lat: number; lng: number } | null,
+  isCustom: boolean,
   nearestFountain: Fountain | null,
   minDistance: number | null,
-  isLoading: boolean, 
-  t: any, 
-  unitSystem: UnitSystem, 
+  isLoading: boolean,
+  t: any,
+  unitSystem: UnitSystem,
   radiusKm: number,
   isDismissed: boolean,
-  onDismiss: () => void
+  onDismiss: () => void,
+  offlinePad?: boolean
 }) {
   if (isDismissed) return null;
+
+  // When the offline banner is shown, shift down so it doesn't overlap
+  const topClass = offlinePad
+    ? 'top-[calc(3rem+env(safe-area-inset-top))]'
+    : 'top-[calc(1rem+env(safe-area-inset-top))]';
 
   // State 1: Waiting for initial location
   if (!targetLocation) {
     return (
-      <div className="absolute top-[calc(1rem+env(safe-area-inset-top))] left-4 right-4 z-[1000] bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-lg text-center font-medium text-gray-600 border border-white/20 flex items-center justify-center gap-2">
+      <div className={`absolute ${topClass} left-4 right-4 z-[1000] bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-lg text-center font-medium text-gray-600 border border-white/20 flex items-center justify-center gap-2`}>
         <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
         {t.locating}
       </div>
@@ -58,7 +67,7 @@ function HydrationIndicator({
   // State 2: Location found, fetching fountains data
   if (isLoading && !nearestFountain) {
     return (
-      <div className="absolute top-[calc(1rem+env(safe-area-inset-top))] left-4 right-4 z-[1000] bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-lg text-center font-medium text-gray-600 border border-white/20 flex items-center justify-center gap-2">
+      <div className={`absolute ${topClass} left-4 right-4 z-[1000] bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-lg text-center font-medium text-gray-600 border border-white/20 flex items-center justify-center gap-2`}>
         <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
         {t.searching}
       </div>
@@ -68,7 +77,7 @@ function HydrationIndicator({
   // State 3: No fountains found within the selected radius
   if (!nearestFountain || minDistance === null) {
     return (
-      <div className="absolute top-[calc(1rem+env(safe-area-inset-top))] left-4 right-4 z-[1000] bg-red-500 text-white p-4 rounded-2xl shadow-lg text-center font-medium flex items-center justify-between gap-2">
+      <div className={`absolute ${topClass} left-4 right-4 z-[1000] bg-red-500 text-white p-4 rounded-2xl shadow-lg text-center font-medium flex items-center justify-between gap-2`}>
         <div className="flex items-center gap-2 flex-1 justify-center">
           <AlertTriangle className="w-5 h-5" />
           {t.noFountains.replace('{radius}', formatDistance(radiusKm, unitSystem, t))}
@@ -83,22 +92,21 @@ function HydrationIndicator({
   let statusConfig = { color: 'bg-blue-500', text: '', icon: <Droplets className="w-6 h-6" /> };
   const formattedDist = formatDistance(minDistance, unitSystem, t);
 
-  // Determine the status level based on proximity (absolute distances for walking)
-  if (minDistance <= 0.15) { // Within 150m is an Oasis
+  if (minDistance <= 0.15) {
     statusConfig = { color: 'bg-blue-500', text: isCustom ? t.oasisPoint : t.oasisYou, icon: <Droplets className="w-6 h-6" /> };
-  } else if (minDistance <= 0.5) { // Within 500m is Safe
+  } else if (minDistance <= 0.5) {
     statusConfig = { color: 'bg-emerald-500', text: (isCustom ? t.safePoint : t.safeYou).replace('{dist}', formattedDist), icon: <CheckCircle className="w-6 h-6" /> };
-  } else { // Further than 500m is Caution
+  } else {
     statusConfig = { color: 'bg-amber-500', text: (isCustom ? t.cautionPoint : t.cautionYou).replace('{dist}', formattedDist), icon: <AlertTriangle className="w-6 h-6" /> };
   }
 
   return (
-    <div className={`absolute top-[calc(1rem+env(safe-area-inset-top))] left-4 right-4 z-[1000] ${statusConfig.color} text-white p-4 rounded-2xl shadow-lg flex items-center justify-between gap-3 transition-colors`}>
+    <div className={`absolute ${topClass} left-4 right-4 z-[1000] ${statusConfig.color} text-white p-4 rounded-2xl shadow-lg flex items-center justify-between gap-3 transition-colors`}>
       <div className="flex items-center gap-3">
         {statusConfig.icon}
         <span className="font-semibold text-lg">{statusConfig.text}</span>
       </div>
-      <button onClick={onDismiss} className="p-1 hover:bg-white/20 rounded-full transition-colors">
+      <button onClick={onDismiss} className="p-1.5 hover:bg-white/20 rounded-full transition-colors active:scale-90">
         <X className="w-5 h-5" />
       </button>
     </div>
@@ -128,54 +136,38 @@ function AppContent() {
   // Custom Hooks for Logic
   const [isFollowModeActive, setIsFollowModeActive] = useState(true);
   const { userLocation, hasInitialLocation, mapCenterCommand, setMapCenterCommand } = useGeolocation(isFollowModeActive);
-  
   const targetLocation = customLocation || userLocation;
   const { fountains, isLoading } = useFountains(targetLocation, radiusKm);
-  
   const deviceHeading = useDeviceOrientation(isCompassActive);
   useWakeLock(isWakeLockActive);
+  const { trigger: haptic } = useHaptics();
+  const isOnline = useNetworkStatus();
 
   const t = translations[language];
 
   const handleFountainSelect = useCallback((fountain: Fountain) => {
+    haptic('selection');
     setSelectedFountain(fountain);
-  }, []);
-
-  const handleViewModeChange = (mode: 'map' | 'list') => {
-    setViewMode(mode);
-  };
+  }, [haptic]);
 
   // Calculate nearest fountain for the indicator and compass
   const { minDistance, nearestFountain } = useMemo(() => {
     if (!targetLocation || fountains.length === 0) return { minDistance: null, nearestFountain: null };
-    
     let min = Infinity;
     let nearest = null;
-    
     for (const f of fountains) {
       const d = getDistanceFromLatLonInKm(targetLocation.lat, targetLocation.lng, f.lat, f.lng);
-      if (d < min) {
-        min = d;
-        nearest = f;
-      }
+      if (d < min) { min = d; nearest = f; }
     }
-    
     return { minDistance: min, nearestFountain: nearest };
   }, [targetLocation, fountains]);
 
-  // Auto-reset the indicator every 5 minutes if it was dismissed,
-  // or immediately if the user selects a new custom location.
+  // Auto-reset indicator when location changes; re-show after 5 minutes if dismissed
+  useEffect(() => { setIsIndicatorDismissed(false); }, [customLocation]);
   useEffect(() => {
-    setIsIndicatorDismissed(false);
-  }, [customLocation]);
-
-  useEffect(() => {
-    if (isIndicatorDismissed) {
-      const timer = setTimeout(() => {
-        setIsIndicatorDismissed(false);
-      }, 5 * 60 * 1000); // 5 minutes
-      return () => clearTimeout(timer);
-    }
+    if (!isIndicatorDismissed) return;
+    const timer = setTimeout(() => setIsIndicatorDismissed(false), 5 * 60 * 1000);
+    return () => clearTimeout(timer);
   }, [isIndicatorDismissed]);
 
   // Persist settings
@@ -187,26 +179,51 @@ function AppContent() {
   }, [language, unitSystem, radiusKm, mapType]);
 
   const handleMapClick = useCallback((latlng: { lat: number; lng: number }) => {
+    haptic('light');
     setCustomLocation(latlng);
     setIsFollowModeActive(false);
     setMapCenterCommand({ ...latlng, ts: Date.now() });
-  }, [setMapCenterCommand]);
+  }, [haptic, setMapCenterCommand]);
 
   const handleLocateMe = useCallback(() => {
+    haptic('medium');
     setCustomLocation(null);
     setIsFollowModeActive(true);
-    if (userLocation) {
-      setMapCenterCommand({ ...userLocation, ts: Date.now() });
-    }
-  }, [userLocation, setMapCenterCommand]);
+    if (userLocation) setMapCenterCommand({ ...userLocation, ts: Date.now() });
+  }, [haptic, userLocation, setMapCenterCommand]);
+
+  // Radius options with display labels
+  const radiusOptions: { value: number; label: string }[] = [
+    { value: 0.1, label: '100m' }, { value: 0.5, label: '500m' },
+    { value: 1, label: '1km' }, { value: 2, label: '2km' },
+    { value: 5, label: '5km' }, { value: 10, label: '10km' },
+    { value: 20, label: '20km' },
+  ];
+
+  const mapTypeOptions: { value: 'standard' | 'satellite' | 'terrain' | 'light' | 'dark'; label: string }[] = [
+    { value: 'standard', label: t.mapStandard },
+    { value: 'satellite', label: t.mapSatellite },
+    { value: 'terrain', label: t.mapTerrain },
+    { value: 'light', label: t.mapLight },
+    { value: 'dark', label: t.mapDark },
+  ];
 
   return (
     <div className="h-[100dvh] w-full relative overflow-hidden bg-gray-50">
-      
-      {/* Hydration Safety Indicator */}
-      <HydrationIndicator 
-        targetLocation={targetLocation} 
-        isCustom={!!customLocation} 
+
+      {/* ── Offline Banner ─────────────────────────────────────────────── */}
+      {!isOnline && (
+        <div className="absolute top-0 left-0 right-0 z-[3000] bg-gray-900/95 text-white text-sm font-medium flex items-center justify-center gap-2 py-2 px-4"
+          style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top))' }}>
+          <WifiOff className="w-4 h-4 shrink-0" />
+          {t.offline}
+        </div>
+      )}
+
+      {/* ── Hydration Safety Indicator ──────────────────────────────────── */}
+      <HydrationIndicator
+        targetLocation={targetLocation}
+        isCustom={!!customLocation}
         nearestFountain={nearestFountain}
         minDistance={minDistance}
         isLoading={isLoading}
@@ -214,21 +231,21 @@ function AppContent() {
         unitSystem={unitSystem}
         radiusKm={radiusKm}
         isDismissed={isIndicatorDismissed}
-        onDismiss={() => setIsIndicatorDismissed(true)}
+        onDismiss={() => { haptic('light'); setIsIndicatorDismissed(true); }}
+        offlinePad={!isOnline}
       />
 
-      {/* Clear Custom Location Button */}
+      {/* ── Clear Custom Pin ────────────────────────────────────────────── */}
       {customLocation && (
         <div className={`absolute left-1/2 -translate-x-1/2 z-[1000] transition-all duration-300 ${isIndicatorDismissed ? 'top-[calc(1rem+env(safe-area-inset-top))]' : 'top-[calc(5.5rem+env(safe-area-inset-top))]'}`}>
           <button
             onClick={() => {
+              haptic('light');
               setCustomLocation(null);
               setIsFollowModeActive(true);
-              if (userLocation) {
-                setMapCenterCommand({ ...userLocation, ts: Date.now() });
-              }
+              if (userLocation) setMapCenterCommand({ ...userLocation, ts: Date.now() });
             }}
-            className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-md text-gray-700 font-medium border border-gray-200 flex items-center gap-2 hover:bg-gray-50 transition-colors"
+            className="bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-full shadow-md text-gray-700 font-medium border border-gray-200 flex items-center gap-2 active:scale-95 transition-all"
           >
             <X className="w-4 h-4" />
             {t.clearPin}
@@ -236,14 +253,14 @@ function AppContent() {
         </div>
       )}
 
-      {/* Main Content Area: Map or List View */}
+      {/* ── Main Content ────────────────────────────────────────────────── */}
       <div className="h-full w-full">
         {viewMode === 'map' ? (
-          <MapView 
-            userLocation={userLocation} 
+          <MapView
+            userLocation={userLocation}
             customLocation={customLocation}
-            fountains={fountains} 
-            onFountainSelect={handleFountainSelect} 
+            fountains={fountains}
+            onFountainSelect={handleFountainSelect}
             onMapClick={handleMapClick}
             mapType={mapType}
             mapCenterCommand={mapCenterCommand}
@@ -252,9 +269,9 @@ function AppContent() {
             heading={deviceHeading}
           />
         ) : (
-          <ListView 
-            fountains={fountains} 
-            targetLocation={targetLocation} 
+          <ListView
+            fountains={fountains}
+            targetLocation={targetLocation}
             isCustomLocation={!!customLocation}
             t={t}
             unitSystem={unitSystem}
@@ -263,144 +280,173 @@ function AppContent() {
         )}
       </div>
 
-      {/* Floating Controls (Bottom Right) */}
+      {/* ── Floating Controls Bottom-Right ──────────────────────────────── */}
       <div className="absolute bottom-[calc(6rem+env(safe-area-inset-bottom))] right-4 z-[1000] flex flex-col gap-3">
         {viewMode === 'map' && (
-          <>
-            <button 
-              onClick={handleLocateMe} 
-              className={`p-3 rounded-full shadow-lg transition-colors border border-gray-100 ${isFollowModeActive ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white text-blue-600 hover:bg-blue-50'}`}
-              aria-label={t.backToLocation}
-            >
-              <LocateFixed className="w-6 h-6" />
-            </button>
-          </>
+          <button
+            onClick={handleLocateMe}
+            className={`p-3.5 rounded-full shadow-lg transition-all border active:scale-90 ${isFollowModeActive ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-blue-600 border-gray-100'}`}
+            aria-label={t.backToLocation}
+          >
+            <LocateFixed className="w-6 h-6" />
+          </button>
         )}
         <button
-          onClick={() => setIsSettingsOpen(true)}
-          className="bg-white/80 backdrop-blur-sm p-3 rounded-full shadow-sm text-gray-400 hover:text-gray-600 transition-colors border border-gray-100"
+          onClick={() => { haptic('selection'); setIsSettingsOpen(true); }}
+          className="bg-white/90 backdrop-blur-sm p-3.5 rounded-full shadow-md text-gray-500 border border-gray-100 active:scale-90 transition-all"
           aria-label={t.settings}
         >
           <Settings className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Compass Widget (Bottom Left) */}
+      {/* ── Compass Widget Bottom-Left ──────────────────────────────────── */}
       {viewMode === 'map' && (
         <div className="absolute bottom-[calc(6rem+env(safe-area-inset-bottom))] left-4 z-[1000]">
-          <CompassWidget 
-            userLocation={userLocation} 
-            nearestFountain={nearestFountain} 
+          <CompassWidget
+            userLocation={userLocation}
+            nearestFountain={nearestFountain}
             isActive={isCompassActive}
-            onActivate={() => setIsCompassActive(prev => !prev)}
+            onActivate={() => { haptic('medium'); setIsCompassActive(prev => !prev); }}
             heading={deviceHeading}
           />
         </div>
       )}
 
-      {/* View Toggle (Map / List) */}
-      <div className="absolute bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-[1000] bg-white p-1.5 rounded-full shadow-lg flex items-center border border-gray-100">
+      {/* ── View Toggle Bar ─────────────────────────────────────────────── */}
+      <div className="absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-[1000] bg-white p-1.5 rounded-full shadow-lg flex items-center border border-gray-100">
         <button
-          onClick={() => handleViewModeChange('map')}
-          className={`px-6 py-2.5 rounded-full font-semibold transition-colors ${viewMode === 'map' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-gray-500 hover:text-gray-900'}`}
+          onClick={() => { haptic('selection'); setViewMode('map'); }}
+          className={`px-6 py-2.5 rounded-full font-semibold transition-all ${viewMode === 'map' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-gray-500'}`}
         >
           {t.map}
         </button>
         <button
-          onClick={() => handleViewModeChange('list')}
-          className={`px-6 py-2.5 rounded-full font-semibold transition-colors ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-gray-500 hover:text-gray-900'}`}
+          onClick={() => { haptic('selection'); setViewMode('list'); }}
+          className={`px-5 py-2.5 rounded-full font-semibold transition-all flex items-center gap-1.5 ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-gray-500'}`}
         >
           {t.list}
+          {fountains.length > 0 && (
+            <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${viewMode === 'list' ? 'bg-white/25 text-white' : 'bg-blue-100 text-blue-700'}`}>
+              {fountains.length}
+            </span>
+          )}
         </button>
       </div>
 
-      {/* Fountain Details Overlay (Bottom Sheet) */}
+      {/* ── Fountain Details Bottom Sheet ───────────────────────────────── */}
       {viewMode === 'map' && (
-        <FountainDetails 
-          fountain={selectedFountain} 
-          onClose={() => setSelectedFountain(null)} 
+        <FountainDetails
+          fountain={selectedFountain}
+          onClose={() => { haptic('light'); setSelectedFountain(null); }}
           userLocation={targetLocation}
           t={t}
           unitSystem={unitSystem}
         />
       )}
 
-      {/* Settings Modal */}
+      {/* ── Settings Bottom Sheet ───────────────────────────────────────── */}
       {isSettingsOpen && (
-        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm z-[2000] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-gray-900">{t.settings}</h2>
-                <button onClick={() => setIsSettingsOpen(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
-                  <X className="w-5 h-5 text-gray-500" />
-                </button>
-              </div>
-              
-              <div className="space-y-5">
-                {/* Language Selector */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.language}</label>
-                  <select value={language} onChange={e => setLanguage(e.target.value as Language)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-700">
-                    <option value="es">Español</option>
-                    <option value="ca">Català</option>
-                    <option value="en">English</option>
-                  </select>
-                </div>
-                
-                {/* Unit System Selector */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.units}</label>
-                  <select value={unitSystem} onChange={e => setUnitSystem(e.target.value as UnitSystem)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-700">
-                    <option value="metric">{t.metric}</option>
-                    <option value="imperial">{t.imperial}</option>
-                  </select>
-                </div>
-
-                {/* Search Radius Selector */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.radius}</label>
-                  <select value={radiusKm} onChange={e => setRadiusKm(Number(e.target.value))} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-700">
-                    <option value={0.1}>100 m</option>
-                    <option value={0.5}>500 m</option>
-                    <option value={1}>1 km</option>
-                    <option value={2}>2 km</option>
-                    <option value={5}>5 km</option>
-                    <option value={10}>10 km</option>
-                    <option value={20}>20 km</option>
-                  </select>
-                </div>
-
-                {/* Map Type Selector */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.mapType}</label>
-                  <select value={mapType} onChange={e => setMapType(e.target.value as any)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-700">
-                    <option value="standard">{t.mapStandard}</option>
-                    <option value="satellite">{t.mapSatellite}</option>
-                    <option value="terrain">{t.mapTerrain}</option>
-                    <option value="light">{t.mapLight}</option>
-                    <option value="dark">{t.mapDark}</option>
-                  </select>
-                </div>
-
-                {/* Wake Lock Toggle */}
-                <div className="flex items-center justify-between py-2">
-                  <span className="text-sm font-medium text-gray-700">{t.keepScreenOn}</span>
-                  <button 
-                    onClick={() => setIsWakeLockActive(!isWakeLockActive)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isWakeLockActive ? 'bg-blue-600' : 'bg-gray-200'}`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isWakeLockActive ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </button>
-                </div>
-              </div>
-
+        <div className="absolute inset-0 z-[2000]">
+          {/* Scrim */}
+          <div
+            className="absolute inset-0 bg-black/50 animate-fade-in"
+            onClick={() => setIsSettingsOpen(false)}
+          />
+          {/* Sheet – slides up from bottom, max 90dvh for long devices */}
+          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl max-h-[90dvh] flex flex-col animate-slide-up">
+            {/* Drag handle */}
+            <div className="flex justify-center pt-3 pb-0 shrink-0">
+              <div className="w-10 h-1 bg-gray-200 rounded-full" />
+            </div>
+            {/* Header */}
+            <div className="px-6 pt-3 pb-4 flex items-center justify-between border-b border-gray-100 shrink-0">
+              <h2 className="text-xl font-bold text-gray-900">{t.settings}</h2>
               <button
                 onClick={() => setIsSettingsOpen(false)}
-                className="w-full mt-8 bg-gray-900 text-white py-3.5 rounded-xl font-semibold hover:bg-gray-800 transition-colors"
+                className="p-2.5 bg-gray-100 rounded-full active:scale-90 transition-all"
               >
-                {t.close}
+                <X className="w-5 h-5 text-gray-500" />
               </button>
+            </div>
+
+            {/* Scrollable settings content */}
+            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6 pb-[calc(2rem+env(safe-area-inset-bottom))]">
+
+              {/* Language – segmented chips */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{t.language}</label>
+                <div className="flex gap-2">
+                  {(['es', 'ca', 'en'] as Language[]).map(lang => (
+                    <button
+                      key={lang}
+                      onClick={() => { haptic('selection'); setLanguage(lang); }}
+                      className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 ${language === lang ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600'}`}
+                    >
+                      {lang === 'es' ? 'ES' : lang === 'ca' ? 'CA' : 'EN'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Units – segmented toggle */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{t.units}</label>
+                <div className="flex bg-gray-100 rounded-xl p-1">
+                  {(['metric', 'imperial'] as UnitSystem[]).map(u => (
+                    <button
+                      key={u}
+                      onClick={() => { haptic('selection'); setUnitSystem(u); }}
+                      className={`flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all active:scale-95 ${unitSystem === u ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                    >
+                      {u === 'metric' ? 'km / m' : 'mi / ft'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Search radius – scrollable chips */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{t.radius}</label>
+                <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                  {radiusOptions.map(({ value, label }) => (
+                    <button
+                      key={value}
+                      onClick={() => { haptic('selection'); setRadiusKm(value); }}
+                      className={`shrink-0 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 ${radiusKm === value ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Map type – scrollable chips */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{t.mapType}</label>
+                <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                  {mapTypeOptions.map(({ value, label }) => (
+                    <button
+                      key={value}
+                      onClick={() => { haptic('selection'); setMapType(value); }}
+                      className={`shrink-0 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 ${mapType === value ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Keep screen on – large toggle */}
+              <div className="flex items-center justify-between py-1">
+                <span className="text-base font-medium text-gray-800">{t.keepScreenOn}</span>
+                <button
+                  onClick={() => { haptic('medium'); setIsWakeLockActive(prev => !prev); }}
+                  className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none ${isWakeLockActive ? 'bg-blue-600' : 'bg-gray-200'}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${isWakeLockActive ? 'translate-x-8' : 'translate-x-1'}`} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
