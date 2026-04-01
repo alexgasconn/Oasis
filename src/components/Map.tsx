@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { MapContainer, TileLayer, Marker, Circle, Polyline, useMap, useMapEvents, AttributionControl } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -157,6 +157,56 @@ function MapClickHandler({ onMapClick }: { onMapClick: (latlng: { lat: number; l
     }
   });
   return null;
+}
+
+/**
+ * Renders only the fountain markers that are within the current map viewport
+ * (plus a 40% buffer to avoid pop-in). This dramatically reduces DOM nodes
+ * when thousands of fountains are loaded, keeping panning smooth.
+ * The nearest fountain is always rendered even if off-screen (for the polyline).
+ */
+function VisibleFountainsLayer({
+  fountains,
+  onFountainSelect,
+  nearestFountainId,
+}: {
+  fountains: Fountain[];
+  onFountainSelect: (fountain: Fountain) => void;
+  nearestFountainId?: string | null;
+}) {
+  const map = useMap();
+  const [bounds, setBounds] = useState(() => map.getBounds().pad(0.4));
+
+  useMapEvents({
+    moveend: () => setBounds(map.getBounds().pad(0.4)),
+    zoomend: () => setBounds(map.getBounds().pad(0.4)),
+  });
+
+  const isValidLatLng = (lat: any, lng: any) =>
+    typeof lat === 'number' && !isNaN(lat) && isFinite(lat) &&
+    typeof lng === 'number' && !isNaN(lng) && isFinite(lng);
+
+  const visibleFountains = useMemo(() => {
+    return fountains.filter(f =>
+      isValidLatLng(f.lat, f.lng) &&
+      (bounds.contains([f.lat, f.lng]) || f.id === nearestFountainId)
+    );
+  }, [fountains, bounds, nearestFountainId]);
+
+  return (
+    <>
+      {visibleFountains.map((fountain) => (
+        <Marker
+          key={fountain.id}
+          position={[fountain.lat, fountain.lng]}
+          icon={getIconForFountain(fountain)}
+          eventHandlers={{
+            click: () => onFountainSelect(fountain),
+          }}
+        />
+      ))}
+    </>
+  );
 }
 
 // ============================================================================
@@ -339,20 +389,12 @@ export function MapView({
         />
       )}
 
-      {/* Water Fountain Markers */}
-      {fountains.map((fountain) => {
-        if (!isValidLatLng(fountain.lat, fountain.lng)) return null;
-        return (
-          <Marker
-            key={fountain.id}
-            position={[fountain.lat, fountain.lng]}
-            icon={getIconForFountain(fountain)}
-            eventHandlers={{
-              click: () => onFountainSelect(fountain),
-            }}
-          />
-        );
-      })}
+      {/* Water Fountain Markers – only renders visible viewport for performance */}
+      <VisibleFountainsLayer
+        fountains={fountains}
+        onFountainSelect={onFountainSelect}
+        nearestFountainId={nearestFountain?.id}
+      />
     </MapContainer>
   );
 }
