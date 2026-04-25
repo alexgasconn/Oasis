@@ -224,6 +224,7 @@ interface MapProps {
   nearestFountain: Fountain | null;
   isFollowMode: boolean;
   heading: number | null;
+  isOnline: boolean;
 }
 
 export function MapView({
@@ -236,7 +237,8 @@ export function MapView({
   mapCenterCommand,
   nearestFountain,
   isFollowMode,
-  heading
+  heading,
+  isOnline
 }: MapProps) {
   // Default to Madrid if no location is available yet
   const defaultCenter = { lat: 40.4168, lng: -3.7038 };
@@ -248,6 +250,8 @@ export function MapView({
     typeof lng === 'number' && !isNaN(lng) && isFinite(lng);
 
   const center = isValidLatLng(rawCenter.lat, rawCenter.lng) ? rawCenter : defaultCenter;
+
+  const effectiveMapType = !isOnline && mapType !== 'standard' ? 'standard' : mapType;
 
   const polylinePositions = useMemo(() => {
     if (!nearestFountain || !isValidLatLng(nearestFountain.lat, nearestFountain.lng)) return null;
@@ -261,7 +265,7 @@ export function MapView({
    * Returns the appropriate tile layer URL based on the selected map type.
    */
   const getMapUrl = () => {
-    switch (mapType) {
+    switch (effectiveMapType) {
       case 'satellite':
         return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
       case 'terrain':
@@ -281,7 +285,7 @@ export function MapView({
    * This is legally required by map tile providers.
    */
   const getMapAttribution = () => {
-    switch (mapType) {
+    switch (effectiveMapType) {
       case 'satellite':
         return 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
       case 'terrain':
@@ -318,7 +322,7 @@ export function MapView({
 
       {/* Base Map Layer */}
       <TileLayer
-        key={mapType} // Force re-render when mapType changes
+        key={effectiveMapType} // Force re-render when map type changes or we fall back offline
         attribution={getMapAttribution()}
         url={getMapUrl()}
       />

@@ -267,6 +267,7 @@ function AppContent() {
             nearestFountain={isCompassActive ? nearestFountain : null}
             isFollowMode={isFollowModeActive}
             heading={deviceHeading}
+            isOnline={isOnline}
           />
         ) : (
           <ListView
