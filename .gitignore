@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Offline tile generation working files (large, regenerate via scripts/*)
+tools/planetiler.jar
+tools/data/
+tools/*.mbtiles

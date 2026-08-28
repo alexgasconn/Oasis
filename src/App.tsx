@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { MapView } from './components/Map';
+import { OfflineMapView } from './components/OfflineMap';
 import { FountainDetails } from './components/FountainDetails';
 import { ListView } from './components/ListView';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -137,7 +138,7 @@ function AppContent() {
   const [isFollowModeActive, setIsFollowModeActive] = useState(true);
   const { userLocation, hasInitialLocation, mapCenterCommand, setMapCenterCommand } = useGeolocation(isFollowModeActive);
   const targetLocation = customLocation || userLocation;
-  const { fountains, isLoading } = useFountains(targetLocation, radiusKm);
+  const { fountains, isLoading, error: fountainsError, retry: retryFountains } = useFountains(targetLocation, radiusKm);
   const deviceHeading = useDeviceOrientation(isCompassActive);
   useWakeLock(isWakeLockActive);
   const { trigger: haptic } = useHaptics();
@@ -220,6 +221,28 @@ function AppContent() {
         </div>
       )}
 
+      {/* ── Fountains Error Banner ───────────────────────────────────── */}
+      {fountainsError && (
+        <div className="absolute top-0 left-0 right-0 z-[3001] bg-red-600 text-white text-sm font-medium flex items-center justify-between gap-2 py-2 px-4"
+          style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top))' }}>
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4" />
+            <span>{fountainsError}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { haptic('selection'); retryFountains(); }}
+              className="bg-white text-red-600 px-3 py-1.5 rounded-xl font-semibold"
+            >
+              {t.retry}
+            </button>
+            <button onClick={() => { /* dismiss */ }} className="p-1 text-white/80">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Hydration Safety Indicator ──────────────────────────────────── */}
       <HydrationIndicator
         targetLocation={targetLocation}
@@ -256,19 +279,30 @@ function AppContent() {
       {/* ── Main Content ────────────────────────────────────────────────── */}
       <div className="h-full w-full">
         {viewMode === 'map' ? (
-          <MapView
-            userLocation={userLocation}
-            customLocation={customLocation}
-            fountains={fountains}
-            onFountainSelect={handleFountainSelect}
-            onMapClick={handleMapClick}
-            mapType={mapType}
-            mapCenterCommand={mapCenterCommand}
-            nearestFountain={isCompassActive ? nearestFountain : null}
-            isFollowMode={isFollowModeActive}
-            heading={deviceHeading}
-            isOnline={isOnline}
-          />
+          isOnline ? (
+            <MapView
+              userLocation={userLocation}
+              customLocation={customLocation}
+              fountains={fountains}
+              onFountainSelect={handleFountainSelect}
+              onMapClick={handleMapClick}
+              mapType={mapType}
+              mapCenterCommand={mapCenterCommand}
+              nearestFountain={isCompassActive ? nearestFountain : null}
+              isFollowMode={isFollowModeActive}
+              heading={deviceHeading}
+              isOnline={isOnline}
+            />
+          ) : (
+            <OfflineMapView
+              userLocation={userLocation}
+              customLocation={customLocation}
+              fountains={fountains}
+              onFountainSelect={handleFountainSelect}
+              onMapClick={handleMapClick}
+              mapCenterCommand={mapCenterCommand}
+            />
+          )
         ) : (
           <ListView
             fountains={fountains}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Fountain } from '../types';
 import { fetchFountainsAround } from '../services/overpass';
 import { getDistanceFromLatLonInKm } from '../utils/distance';
@@ -12,7 +12,9 @@ export function useFountains(targetLocation: { lat: number; lng: number } | null
     return saved ? JSON.parse(saved) : [];
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [lastFetchedLocation, setLastFetchedLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!targetLocation) return;
@@ -23,30 +25,36 @@ export function useFountains(targetLocation: { lat: number; lng: number } | null
 
     // Only re-fetch if we've moved significantly (e.g., half the fetch radius)
     if (distFromLastFetch > (FETCH_RADIUS_KM / 2) && !isLoading) {
-      let controller: AbortController | null = null;
-      const fetchData = async () => {
+      const fetchData = async (opts?: { force?: boolean }) => {
         setIsLoading(true);
-        controller = new AbortController();
+        setError(null);
+        // Abort previous pending request
+        if (controllerRef.current) controllerRef.current.abort();
+        controllerRef.current = new AbortController();
         try {
-          const data = await fetchFountainsAround(targetLocation.lat, targetLocation.lng, FETCH_RADIUS_METERS, { signal: controller.signal, timeoutMs: 10000 });
+          const data = await fetchFountainsAround(targetLocation.lat, targetLocation.lng, FETCH_RADIUS_METERS, { signal: controllerRef.current.signal, timeoutMs: 10000 });
           setAllFountains(data);
           setLastFetchedLocation(targetLocation);
           localStorage.setItem('cached_fountains', JSON.stringify(data));
-        } catch (error) {
-          if ((error as any)?.name === 'AbortError') {
+        } catch (err) {
+          if ((err as any)?.name === 'AbortError') {
             console.info('Fountains fetch aborted');
           } else {
-            console.error("Failed to fetch fountains", error);
+            console.error('Failed to fetch fountains', err);
+            setError((err as any)?.message || 'Failed to fetch fountains');
           }
         } finally {
           setIsLoading(false);
         }
       };
 
-      const timeoutId = setTimeout(fetchData, 500);
+      const timeoutId = setTimeout(() => fetchData(), 500);
       return () => {
         clearTimeout(timeoutId);
-        if (controller) controller.abort();
+        if (controllerRef.current) {
+          controllerRef.current.abort();
+          controllerRef.current = null;
+        }
       };
     }
   }, [targetLocation, lastFetchedLocation, isLoading]);
@@ -60,5 +68,11 @@ export function useFountains(targetLocation: { lat: number; lng: number } | null
     });
   }, [allFountains, targetLocation, radiusKm]);
 
-  return { fountains, isLoading };
+  const retry = () => {
+    setError(null);
+    // Reset lastFetchedLocation so the effect will fetch again immediately
+    setLastFetchedLocation(null);
+  };
+
+  return { fountains, isLoading, error, retry };
 }

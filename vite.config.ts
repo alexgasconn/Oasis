@@ -61,6 +61,14 @@ export default defineConfig(({ mode }) => {
               urlPattern: /^https:\/\/overpass-.*/i,
               handler: 'NetworkFirst',
               options: { cacheName: 'overpass-api', expiration: { maxEntries: 50, maxAgeSeconds: 5 * 60 } }
+            },
+            {
+              // Locally bundled offline vector tiles for Catalunya (see scripts/extract-mbtiles.cjs).
+              // Cached on first load so the PWA (web) can still render them once offline;
+              // native Capacitor builds already ship these files inside the app bundle.
+              urlPattern: /\/tiles-vector\/catalunya\/.*\.pbf$/i,
+              handler: 'CacheFirst',
+              options: { cacheName: 'offline-vector-tiles', expiration: { maxEntries: 3000, maxAgeSeconds: 90 * 24 * 60 * 60 } }
             }
           ]
         }

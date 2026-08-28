@@ -59,6 +59,8 @@ export const translations = {
     submitRating: 'Enviar valoración',
     ratingSuccess: '¡Valoración enviada!',
     ratingError: 'Error al enviar la valoración'
+    ,
+    retry: 'Reintentar'
   },
   ca: {
     settings: 'Ajustaments',
@@ -117,6 +119,8 @@ export const translations = {
     submitRating: 'Enviar valoració',
     ratingSuccess: 'Valoració enviada!',
     ratingError: 'Error en enviar la valoració'
+    ,
+    retry: 'Torna-ho a provar'
   },
   en: {
     settings: 'Settings',
@@ -175,6 +179,8 @@ export const translations = {
     submitRating: 'Submit rating',
     ratingSuccess: 'Rating submitted!',
     ratingError: 'Failed to submit rating'
+    ,
+    retry: 'Retry'
   }
 };
 
