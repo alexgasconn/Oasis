@@ -23,22 +23,31 @@ export function useFountains(targetLocation: { lat: number; lng: number } | null
 
     // Only re-fetch if we've moved significantly (e.g., half the fetch radius)
     if (distFromLastFetch > (FETCH_RADIUS_KM / 2) && !isLoading) {
+      let controller: AbortController | null = null;
       const fetchData = async () => {
         setIsLoading(true);
+        controller = new AbortController();
         try {
-          const data = await fetchFountainsAround(targetLocation.lat, targetLocation.lng, FETCH_RADIUS_METERS);
+          const data = await fetchFountainsAround(targetLocation.lat, targetLocation.lng, FETCH_RADIUS_METERS, { signal: controller.signal, timeoutMs: 10000 });
           setAllFountains(data);
           setLastFetchedLocation(targetLocation);
           localStorage.setItem('cached_fountains', JSON.stringify(data));
         } catch (error) {
-          console.error("Failed to fetch fountains", error);
+          if ((error as any)?.name === 'AbortError') {
+            console.info('Fountains fetch aborted');
+          } else {
+            console.error("Failed to fetch fountains", error);
+          }
         } finally {
           setIsLoading(false);
         }
       };
 
       const timeoutId = setTimeout(fetchData, 500);
-      return () => clearTimeout(timeoutId);
+      return () => {
+        clearTimeout(timeoutId);
+        if (controller) controller.abort();
+      };
     }
   }, [targetLocation, lastFetchedLocation, isLoading]);
 

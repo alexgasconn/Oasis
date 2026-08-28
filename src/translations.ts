@@ -48,7 +48,17 @@ export const translations = {
     clearPin: 'Quitar ubicación',
     walkingTimeLabel: 'Caminando aprox.',
     offline: 'Sin conexión · mostrando datos en caché',
-    fountainsCount: '{n} fuentes'
+    fountainsCount: '{n} fuentes',
+    rateThisFountain: 'Valorar esta fuente',
+    ratingsCount: '{n} valoraciones',
+    ratingAvg: 'Media',
+    noRatingsYet: 'Sé el primero en valorar esta fuente',
+    yourRating: 'Tu valoración',
+    yourName: 'Tu nombre (opcional)',
+    comment: 'Comentario (opcional)',
+    submitRating: 'Enviar valoración',
+    ratingSuccess: '¡Valoración enviada!',
+    ratingError: 'Error al enviar la valoración'
   },
   ca: {
     settings: 'Ajustaments',
@@ -96,7 +106,17 @@ export const translations = {
     clearPin: 'Treure ubicació',
     walkingTimeLabel: 'Caminant aprox.',
     offline: 'Sense connexió · mostrant dades en memòria',
-    fountainsCount: '{n} fonts'
+    fountainsCount: '{n} fonts',
+    rateThisFountain: 'Valorar aquesta font',
+    ratingsCount: '{n} valoracions',
+    ratingAvg: 'Mitjana',
+    noRatingsYet: 'Sigues el primer a valorar aquesta font',
+    yourRating: 'La teva valoració',
+    yourName: 'El teu nom (opcional)',
+    comment: 'Comentari (opcional)',
+    submitRating: 'Enviar valoració',
+    ratingSuccess: 'Valoració enviada!',
+    ratingError: 'Error en enviar la valoració'
   },
   en: {
     settings: 'Settings',
@@ -144,7 +164,17 @@ export const translations = {
     clearPin: 'Clear pin',
     walkingTimeLabel: 'Walking approx.',
     offline: 'Offline · showing cached data',
-    fountainsCount: '{n} fountains'
+    fountainsCount: '{n} fountains',
+    rateThisFountain: 'Rate this fountain',
+    ratingsCount: '{n} ratings',
+    ratingAvg: 'Avg',
+    noRatingsYet: 'Be the first to rate this fountain',
+    yourRating: 'Your rating',
+    yourName: 'Your name (optional)',
+    comment: 'Comment (optional)',
+    submitRating: 'Submit rating',
+    ratingSuccess: 'Rating submitted!',
+    ratingError: 'Failed to submit rating'
   }
 };
 

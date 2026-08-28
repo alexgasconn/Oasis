@@ -1,9 +1,10 @@
-﻿import { useRef, useState } from 'react';
-import { X, Navigation, Share2, Clock } from 'lucide-react';
+﻿import { useRef, useState, useEffect, useCallback } from 'react';
+import { X, Navigation, Share2, Clock, Star } from 'lucide-react';
 import { Fountain } from '../types';
 import { getDistanceFromLatLonInKm } from '../utils/distance';
 import { formatDistance, UnitSystem } from '../translations';
 import { PotabilityBadge } from './PotabilityBadge';
+import { getAggregates, submitRating, type Aggregate } from '../services/supabase';
 
 interface Props {
   fountain: Fountain | null;
@@ -11,6 +12,8 @@ interface Props {
   userLocation: { lat: number; lng: number } | null;
   t: any; // Translation object
   unitSystem: UnitSystem;
+  /** Authenticated Supabase user id, or null for anonymous. */
+  userId?: string | null;
 }
 
 /** Average walking speed used for time estimates. */
@@ -29,12 +32,70 @@ function getWalkingTime(distKm: number): string {
  * FountainDetails Component
  *
  * Touch-draggable bottom sheet showing fountain details.
- * Drag down â‰¥ 90px (or a quick flick) to dismiss.
+ * Drag down ≥ 90px (or a quick flick) to dismiss.
  */
-export function FountainDetails({ fountain, onClose, userLocation, t, unitSystem }: Props) {
+export function FountainDetails({ fountain, onClose, userLocation, t, unitSystem, userId = null }: Props) {
   const [dragY, setDragY] = useState(0);
   const startTouchY = useRef(0);
   const isDraggingRef = useRef(false);
+
+  // ── Ratings state ────────────────────────────────────────────────────────────
+  const [aggregate, setAggregate] = useState<Aggregate | null>(null);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [hoverStar, setHoverStar] = useState(0);
+  const [selectedStar, setSelectedStar] = useState(0);
+  const [ratingName, setRatingName] = useState('');
+  const [ratingComment, setRatingComment] = useState('');
+  const [submitState, setSubmitState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [submitError, setSubmitError] = useState('');
+
+  const loadAggregates = useCallback(async (fountainId: string) => {
+    try {
+      const agg = await getAggregates(fountainId);
+      setAggregate(agg);
+    } catch {
+      // Non-critical: silently ignore aggregate fetch errors
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!fountain) return;
+    setAggregate(null);
+    setShowRatingModal(false);
+    setSelectedStar(0);
+    setSubmitState('idle');
+    loadAggregates(fountain.id);
+  }, [fountain?.id, loadAggregates]);
+
+  const handleSubmitRating = async () => {
+    if (!fountain || selectedStar === 0) return;
+    setSubmitState('loading');
+    setSubmitError('');
+    try {
+      await submitRating({
+        fountainId: fountain.id,
+        name: ratingName.trim() || undefined,
+        rating: selectedStar,
+        comment: ratingComment.trim() || undefined,
+        lat: fountain.lat,
+        lng: fountain.lng,
+        metadata: { potable: fountain.potable, status: fountain.status, type: fountain.type },
+        userId: userId ?? undefined,
+      });
+      setSubmitState('success');
+      setSelectedStar(0);
+      setRatingName('');
+      setRatingComment('');
+      await loadAggregates(fountain.id);
+      setTimeout(() => {
+        setShowRatingModal(false);
+        setSubmitState('idle');
+      }, 1500);
+    } catch (err) {
+      setSubmitState('error');
+      setSubmitError(err instanceof Error ? err.message : t.ratingError);
+    }
+  };
 
   if (!fountain) return null;
 
@@ -172,8 +233,126 @@ export function FountainDetails({ fountain, onClose, userLocation, t, unitSystem
               <Share2 className="w-6 h-6" />
             </button>
           </div>
+
+          {/* ── Rating summary ────────────────────────────────────────────── */}
+          <div className="mt-5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {aggregate && aggregate.rating_count > 0 ? (
+                <>
+                  <div className="flex items-center gap-0.5">
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <Star
+                        key={s}
+                        className={`w-4 h-4 ${s <= Math.round(aggregate.rating_avg ?? 0) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-gray-700 font-semibold text-sm">
+                    {Number(aggregate.rating_avg).toFixed(1)}
+                  </span>
+                  <span className="text-gray-400 text-sm">
+                    ({t.ratingsCount.replace('{n}', String(aggregate.rating_count))})
+                  </span>
+                </>
+              ) : (
+                <span className="text-gray-400 text-sm">{t.noRatingsYet}</span>
+              )}
+            </div>
+            <button
+              onClick={() => { setShowRatingModal(true); setSubmitState('idle'); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-xl text-sm font-medium hover:bg-yellow-100 active:scale-95 transition-all"
+            >
+              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+              {t.rateThisFountain}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* ── Rating modal ──────────────────────────────────────────────────── */}
+      {showRatingModal && (
+        <div
+          className="absolute inset-0 bg-black/50 z-[1001] flex items-end justify-center animate-fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowRatingModal(false); }}
+        >
+          <div className="w-full bg-white rounded-t-3xl p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-2xl animate-slide-up">
+            {/* Modal header */}
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-xl font-bold text-gray-900">{t.rateThisFountain}</h3>
+              <button
+                onClick={() => setShowRatingModal(false)}
+                className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 active:scale-90 transition-all"
+                aria-label={t.close}
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Star picker */}
+            <p className="text-sm font-medium text-gray-600 mb-2">{t.yourRating}</p>
+            <div className="flex gap-2 mb-5">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <button
+                  key={s}
+                  onMouseEnter={() => setHoverStar(s)}
+                  onMouseLeave={() => setHoverStar(0)}
+                  onClick={() => setSelectedStar(s)}
+                  className="p-1 transition-transform active:scale-90"
+                  aria-label={`${s} star`}
+                >
+                  <Star
+                    className={`w-9 h-9 transition-colors ${s <= (hoverStar || selectedStar) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                  />
+                </button>
+              ))}
+            </div>
+
+            {/* Name field */}
+            <input
+              type="text"
+              value={ratingName}
+              onChange={(e) => setRatingName(e.target.value)}
+              placeholder={t.yourName}
+              maxLength={80}
+              className="w-full mb-3 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
+            />
+
+            {/* Comment field */}
+            <textarea
+              value={ratingComment}
+              onChange={(e) => setRatingComment(e.target.value)}
+              placeholder={t.comment}
+              maxLength={500}
+              rows={3}
+              className="w-full mb-4 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm resize-none"
+            />
+
+            {/* Error message */}
+            {submitState === 'error' && (
+              <p className="text-red-500 text-sm mb-3">{submitError || t.ratingError}</p>
+            )}
+
+            {/* Submit button */}
+            <button
+              onClick={handleSubmitRating}
+              disabled={selectedStar === 0 || submitState === 'loading' || submitState === 'success'}
+              className={`w-full py-4 rounded-2xl font-semibold text-lg transition-all ${submitState === 'success'
+                  ? 'bg-green-500 text-white'
+                  : selectedStar === 0 || submitState === 'loading'
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.97] shadow-lg shadow-blue-600/25'
+                }`}
+            >
+              {submitState === 'loading'
+                ? '...'
+                : submitState === 'success'
+                  ? t.ratingSuccess
+                  : t.submitRating}
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
+

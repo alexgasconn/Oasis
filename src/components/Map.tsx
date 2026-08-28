@@ -6,6 +6,9 @@ import L from 'leaflet';
 import 'leaflet-rotate';
 import { Fountain } from '../types';
 
+// CARTO Basemaps API key. Prefer using an env var `VITE_CARTO_API_KEY`.
+const CARTO_API_KEY = (import.meta as any)?.env?.VITE_CARTO_API_KEY || 'cb1_2hl3_1_c4dfd0f0c288bbb5cd981bed';
+
 // ============================================================================
 // Leaflet Icon Fixes
 // ============================================================================
@@ -271,9 +274,9 @@ export function MapView({
       case 'terrain':
         return 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
       case 'light':
-        return 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+        return `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`;
       case 'dark':
-        return 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+        return `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=${CARTO_API_KEY}`;
       case 'standard':
       default:
         return 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';

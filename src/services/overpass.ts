@@ -15,7 +15,12 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 /**
  * Fetches drinking water fountains from the OpenStreetMap Overpass API.
  */
-export async function fetchFountainsAround(lat: number, lng: number, radius: number = 5000): Promise<Fountain[]> {
+export async function fetchFountainsAround(
+  lat: number,
+  lng: number,
+  radius: number = 5000,
+  options?: { signal?: AbortSignal; timeoutMs?: number }
+): Promise<Fountain[]> {
   // Round coordinates to ~100m precision for caching keys
   const cacheKey = `${lat.toFixed(3)}-${lng.toFixed(3)}-${radius}`;
   const cached = cache.get(cacheKey);
@@ -35,14 +40,27 @@ export async function fetchFountainsAround(lat: number, lng: number, radius: num
   
   const encodedQuery = encodeURIComponent(query);
   let lastError: any = null;
+  const timeoutMs = options?.timeoutMs ?? 10000; // per-request timeout default 10s
 
   // Try different mirrors with a simple retry strategy
   for (let attempt = 0; attempt < 3; attempt++) {
     for (const mirror of OVERPASS_MIRRORS) {
+      // If the caller already aborted, stop immediately and propagate
+      if (options?.signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
+
+      let attemptController = new AbortController();
+      const linkedSignal = attemptController.signal;
+      const onParentAbort = () => attemptController.abort();
+      if (options?.signal) options.signal.addEventListener('abort', onParentAbort);
+
+      const attemptTimeout = setTimeout(() => attemptController.abort(), timeoutMs);
+
       try {
         const url = `${mirror}?data=${encodedQuery}`;
-        const response = await fetch(url);
-        
+        const response = await fetch(url, { signal: linkedSignal });
+
         if (response.status === 429) {
           console.warn(`Mirror ${mirror} returned 429 (Too Many Requests). Trying next...`);
           continue; // Try next mirror
@@ -51,7 +69,7 @@ export async function fetchFountainsAround(lat: number, lng: number, radius: num
         if (!response.ok) {
           throw new Error(`Overpass API error: ${response.status} ${response.statusText}`);
         }
-        
+
         const data = await response.json();
         const fountains: Fountain[] = data.elements.map((el: any) => {
           let potable: 'yes' | 'no' | 'unknown' = 'unknown';
@@ -78,11 +96,19 @@ export async function fetchFountainsAround(lat: number, lng: number, radius: num
 
       } catch (error) {
         lastError = error;
+        // If the fetch was aborted because the parent signal was aborted, propagate
+        if ((error as any)?.name === 'AbortError' && options?.signal?.aborted) {
+          // Clean up and rethrow to let caller handle abort
+          throw error;
+        }
         console.warn(`Failed to fetch from ${mirror}:`, error);
         // Continue to next mirror
+      } finally {
+        clearTimeout(attemptTimeout);
+        if (options?.signal) options.signal.removeEventListener('abort', onParentAbort);
       }
     }
-    
+
     // If all mirrors failed, wait a bit before next attempt (exponential backoff)
     if (attempt < 2) {
       const waitTime = Math.pow(2, attempt) * 1000;
