@@ -148,7 +148,7 @@ export function subscribeRatings(
     fountainId: string,
     callback: (rating: Rating) => void
 ): () => void {
-    if (!supabase) return () => {};
+    if (!supabase) return () => { };
     const channel = supabase
         .channel(`ratings:${fountainId}`)
         .on(

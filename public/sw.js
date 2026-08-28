@@ -123,10 +123,36 @@ async function handleApiRequest(request) {
 
   try {
     const response = await fetch(request);
-    cache.put(request, response.clone());
-    return response;
+    // Only cache successful responses
+    if (response && response.ok) {
+      cache.put(request, response.clone());
+      return response;
+    }
+
+    const cached = await cache.match(request);
+    if (cached) return cached;
+
+    // If this was an Overpass API request, return an empty JSON body
+    if (OVERPASS_PATTERN.test(request.url)) {
+      return new Response(JSON.stringify({ elements: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    return Response.error();
   } catch (_error) {
-    return (await cache.match(request)) || Response.error();
+    const cached = await cache.match(request);
+    if (cached) return cached;
+
+    if (OVERPASS_PATTERN.test(request.url)) {
+      return new Response(JSON.stringify({ elements: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    return Response.error();
   }
 }
 

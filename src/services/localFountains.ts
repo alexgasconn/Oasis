@@ -8,20 +8,20 @@ let cache: Fountain[] | null = null;
 let loadPromise: Promise<Fountain[]> | null = null;
 
 export function loadLocalCatalunyaFountains(): Promise<Fountain[]> {
-  if (cache) return Promise.resolve(cache);
-  if (loadPromise) return loadPromise;
+    if (cache) return Promise.resolve(cache);
+    if (loadPromise) return loadPromise;
 
-  loadPromise = fetch('/data/fountains-catalunya.json')
-    .then((res) => (res.ok ? res.json() : []))
-    .then((data: Fountain[]) => {
-      cache = data;
-      return data;
-    })
-    .catch((err) => {
-      console.warn('Failed to load bundled Catalunya fountains dataset', err);
-      cache = [];
-      return [];
-    });
+    loadPromise = fetch('/data/fountains-catalunya.json')
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data: Fountain[]) => {
+            cache = data;
+            return data;
+        })
+        .catch((err) => {
+            console.warn('Failed to load bundled Catalunya fountains dataset', err);
+            cache = [];
+            return [];
+        });
 
-  return loadPromise;
+    return loadPromise;
 }
