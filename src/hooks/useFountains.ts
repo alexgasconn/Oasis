@@ -1,20 +1,28 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Fountain } from '../types';
 import { fetchFountainsAround } from '../services/overpass';
+import { loadLocalCatalunyaFountains } from '../services/localFountains';
 import { getDistanceFromLatLonInKm } from '../utils/distance';
 
-const FETCH_RADIUS_KM = 10; // Large initial fetch radius (10km)
+const FETCH_RADIUS_KM = 20; // Covers every selectable search radius (up to 20km)
 const FETCH_RADIUS_METERS = FETCH_RADIUS_KM * 1000;
 
 export function useFountains(targetLocation: { lat: number; lng: number } | null, radiusKm: number) {
-  const [allFountains, setAllFountains] = useState<Fountain[]>(() => {
+  const [remoteFountains, setRemoteFountains] = useState<Fountain[]>(() => {
     const saved = localStorage.getItem('cached_fountains');
     return saved ? JSON.parse(saved) : [];
   });
+  const [localFountains, setLocalFountains] = useState<Fountain[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastFetchedLocation, setLastFetchedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
+
+  // Bundled offline dataset for Catalunya, used as a baseline so fountains still
+  // show up even if the live Overpass API is unreachable or rate-limited.
+  useEffect(() => {
+    loadLocalCatalunyaFountains().then(setLocalFountains);
+  }, []);
 
   useEffect(() => {
     if (!targetLocation) return;
@@ -33,7 +41,7 @@ export function useFountains(targetLocation: { lat: number; lng: number } | null
         controllerRef.current = new AbortController();
         try {
           const data = await fetchFountainsAround(targetLocation.lat, targetLocation.lng, FETCH_RADIUS_METERS, { signal: controllerRef.current.signal, timeoutMs: 10000 });
-          setAllFountains(data);
+          setRemoteFountains(data);
           setLastFetchedLocation(targetLocation);
           localStorage.setItem('cached_fountains', JSON.stringify(data));
         } catch (err) {
@@ -58,6 +66,16 @@ export function useFountains(targetLocation: { lat: number; lng: number } | null
       };
     }
   }, [targetLocation, lastFetchedLocation, isLoading]);
+
+  // Merge the live Overpass results with the bundled Catalunya baseline
+  // (remote entries win on id collisions since they reflect the latest data).
+  const allFountains = useMemo(() => {
+    if (localFountains.length === 0) return remoteFountains;
+    const byId = new Map<string, Fountain>();
+    for (const f of localFountains) byId.set(f.id, f);
+    for (const f of remoteFountains) byId.set(f.id, f);
+    return Array.from(byId.values());
+  }, [localFountains, remoteFountains]);
 
   // Filter fountains to only show those within the user's selected radius
   const fountains = useMemo(() => {

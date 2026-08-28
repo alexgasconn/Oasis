@@ -37,7 +37,7 @@ export async function fetchFountainsAround(
     );
     out body;
   `;
-  
+
   const encodedQuery = encodeURIComponent(query);
   let lastError: any = null;
   const timeoutMs = options?.timeoutMs ?? 10000; // per-request timeout default 10s
@@ -74,7 +74,7 @@ export async function fetchFountainsAround(
         const fountains: Fountain[] = data.elements.map((el: any) => {
           let potable: 'yes' | 'no' | 'unknown' = 'unknown';
           const tags = el.tags || {};
-          
+
           if (tags.drinking_water === 'yes' || tags.potable === 'yes') potable = 'yes';
           else if (tags.drinking_water === 'no' || tags.potable === 'no') potable = 'no';
           else if (tags.amenity === 'drinking_water') potable = 'yes';
@@ -117,5 +117,5 @@ export async function fetchFountainsAround(
   }
 
   console.error("All Overpass API mirrors failed:", lastError);
-  return [];
+  throw lastError instanceof Error ? lastError : new Error('All Overpass API mirrors failed');
 }

@@ -15,16 +15,18 @@ import { createClient } from '@supabase/supabase-js';
 
 // ── Client ────────────────────────────────────────────────────────────────────
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-    // Fail loudly during development; the app should still load in production
-    // if the env vars are injected by the build system.
-    console.warn('[supabase] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is not set.');
+/** True when ratings (Supabase-backed) are usable in this build. */
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+
+if (!isSupabaseConfigured) {
+    // Don't crash the whole app if ratings aren't configured - just disable that feature.
+    console.warn('[supabase] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is not set. Ratings are disabled.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = isSupabaseConfigured ? createClient(supabaseUrl as string, supabaseAnonKey as string) : null;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -67,6 +69,7 @@ export type SubmitRatingParams = {
  * with service_role (Variant B – change the fetch target accordingly).
  */
 export async function submitRating(params: SubmitRatingParams): Promise<Rating> {
+    if (!supabase) throw new Error('Ratings are not available (Supabase is not configured).');
     const { fountainId, name, rating, comment, lat, lng, metadata, userId } = params;
 
     const payload: Omit<Rating, 'id' | 'created_at'> = {
@@ -100,6 +103,7 @@ export async function submitRating(params: SubmitRatingParams): Promise<Rating> 
  * Returns null if no ratings exist yet.
  */
 export async function getAggregates(fountainId: string): Promise<Aggregate | null> {
+    if (!supabase) return null;
     const { data, error } = await supabase
         .from('fountain_rating_aggregates')
         .select('fountain_id, rating_count, rating_avg')
@@ -117,6 +121,7 @@ export async function getRatings(
     fountainId: string,
     { limit = 20, offset = 0 }: { limit?: number; offset?: number } = {}
 ): Promise<Rating[]> {
+    if (!supabase) return [];
     const { data, error } = await supabase
         .from('ratings')
         .select('*')
@@ -143,6 +148,7 @@ export function subscribeRatings(
     fountainId: string,
     callback: (rating: Rating) => void
 ): () => void {
+    if (!supabase) return () => {};
     const channel = supabase
         .channel(`ratings:${fountainId}`)
         .on(
@@ -158,6 +164,6 @@ export function subscribeRatings(
         .subscribe();
 
     return () => {
-        supabase.removeChannel(channel);
+        supabase?.removeChannel(channel);
     };
 }
