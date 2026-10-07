@@ -29,7 +29,7 @@ Generic map apps can show water points, but they usually require manual search, 
 - fetching only water-related features,
 - computing distance and nearest-target status automatically,
 - exposing fast navigation and share actions,
-- preserving previously fetched data and prewarming map tiles for offline use.
+- including local Catalunya map tiles and fountain locations for offline use.
 
 ## Data Sources
 
@@ -89,15 +89,15 @@ List mode transforms the same fountain dataset into a ranked, scrollable set of 
 
 ### Offline behavior
 
-Oasis now includes stronger offline support for Catalonia:
+Oasis bundles OpenStreetMap-derived vector tiles and fountain locations for Catalunya. Standard, light, and dark styles share the same local tiles. No offline download button is required.
 
-- the service worker preloads OpenStreetMap standard tiles for the Catalonia bounding box,
-- the app caches previously requested same-origin assets,
-- Overpass responses are cached for reuse,
-- the UI automatically falls back to the standard basemap when the device is offline,
-- fetched fountain datasets remain available in `localStorage`.
+- Android/iOS: `npm run build` followed by `npx cap sync` copies the maps and fountains into the native app. They are available from installation, without a first online session.
+- Web/PWA: the generated service worker automatically precaches the app, all Catalunya vector tiles, and the fountain JSON on the first production visit over HTTPS (or localhost). The initial download must finish with internet access before the entire region is available offline. Installing the PWA is not required. Browser storage quotas or eviction can prevent or remove availability.
+- Offline mode never queries Overpass. Nearby fountains, pin selection, the list, and straight-line compass guidance use local data; GPS still requires location permission.
+- Satellite and terrain styles require a connection and fall back to standard when offline. Online fountain updates, ratings, and external navigation remain network-dependent.
+- The extract contains detail up to zoom 12, enlarged at higher zoom levels; the current local style has no street/place labels. Coverage is limited to Catalunya, not all of Spain.
 
-This means the app can continue showing a usable basemap in Catalonia without live internet connectivity, especially at the preloaded zoom levels.
+The app does not bulk-download tiles from the public OpenStreetMap tile servers. Map data is extracted from the local OSM dataset instead. To verify offline behavior, use `npm run build` and `npm run preview`, wait for the service worker to activate, disconnect, reload, and explore a Catalunya area not previously visited. The development server does not install this production service worker.
 
 ## Architecture Summary
 
@@ -107,7 +107,7 @@ Oasis is a client-side React + TypeScript application. Its architecture is inten
 - `src/hooks/` contains browser capability integrations such as geolocation, device orientation, wake lock, network status, and fountain retrieval.
 - `src/services/overpass.ts` encapsulates external data acquisition and short-lived in-memory caching.
 - `src/components/` renders the map, list, compass, bottom sheet, badges, and error handling surfaces.
-- `public/sw.js` handles offline caching and Catalonia tile prewarming.
+- `vite.config.ts` configures the generated production service worker and full Catalunya precaching.
 
 The app follows a frontend-centric data flow:
 
@@ -133,7 +133,7 @@ For a full technical walkthrough, see [TECHNICAL_GUIDE.md](TECHNICAL_GUIDE.md).
 
 ### Platform and packaging
 
-- Progressive Web App support through Vite PWA tooling and a custom service worker strategy.
+- Progressive Web App support through Vite PWA tooling and automatic local-data precaching.
 - Capacitor configuration for Android and iOS packaging.
 
 ### Data and connectivity

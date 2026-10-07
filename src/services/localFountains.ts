@@ -12,14 +12,17 @@ export function loadLocalCatalunyaFountains(): Promise<Fountain[]> {
     if (loadPromise) return loadPromise;
 
     loadPromise = fetch('/data/fountains-catalunya.json')
-        .then((res) => (res.ok ? res.json() : []))
+        .then((res) => {
+            if (!res.ok) throw new Error(`Local fountains unavailable: ${res.status}`);
+            return res.json();
+        })
         .then((data: Fountain[]) => {
             cache = data;
             return data;
         })
         .catch((err) => {
             console.warn('Failed to load bundled Catalunya fountains dataset', err);
-            cache = [];
+            loadPromise = null;
             return [];
         });
 

@@ -3,11 +3,13 @@ import { Fountain } from '../types';
 import { fetchFountainsAround } from '../services/overpass';
 import { loadLocalCatalunyaFountains } from '../services/localFountains';
 import { getDistanceFromLatLonInKm } from '../utils/distance';
+import { useNetworkStatus } from './useNetworkStatus';
 
 const FETCH_RADIUS_KM = 20; // Covers every selectable search radius (up to 20km)
 const FETCH_RADIUS_METERS = FETCH_RADIUS_KM * 1000;
 
 export function useFountains(targetLocation: { lat: number; lng: number } | null, radiusKm: number) {
+  const isOnline = useNetworkStatus();
   const [remoteFountains, setRemoteFountains] = useState<Fountain[]>(() => {
     const saved = localStorage.getItem('cached_fountains');
     return saved ? JSON.parse(saved) : [];
@@ -25,6 +27,12 @@ export function useFountains(targetLocation: { lat: number; lng: number } | null
   }, []);
 
   useEffect(() => {
+    if (!isOnline) {
+      controllerRef.current?.abort();
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
     if (!targetLocation) return;
 
     const distFromLastFetch = lastFetchedLocation
@@ -32,7 +40,7 @@ export function useFountains(targetLocation: { lat: number; lng: number } | null
       : Infinity;
 
     // Only re-fetch if we've moved significantly (e.g., half the fetch radius)
-    if (distFromLastFetch > (FETCH_RADIUS_KM / 2) && !isLoading) {
+    if (distFromLastFetch > (FETCH_RADIUS_KM / 2)) {
       const fetchData = async (opts?: { force?: boolean }) => {
         setIsLoading(true);
         setError(null);
@@ -65,7 +73,7 @@ export function useFountains(targetLocation: { lat: number; lng: number } | null
         }
       };
     }
-  }, [targetLocation, lastFetchedLocation, isLoading]);
+  }, [targetLocation?.lat, targetLocation?.lng, lastFetchedLocation, isOnline]);
 
   // Merge the live Overpass results with the bundled Catalunya baseline
   // (remote entries win on id collisions since they reflect the latest data).

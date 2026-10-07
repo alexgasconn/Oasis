@@ -40,7 +40,7 @@ There are currently no GPX, CSV, or batch-import pipelines in the checked-in cod
 - Multi-language support in Spanish, Catalan, and English.
 - Metric and imperial units.
 - Radius-based filtering from 100 m to 20 km.
-- Offline caching of fetched data and prewarmed Catalonia basemap tiles.
+- Automatic precaching of local Catalunya vector tiles and fountain locations.
 
 ## 2. Architecture and System Design
 
@@ -320,7 +320,7 @@ The final result is rendered in:
 - Validity checks prevent `NaN` coordinates from reaching Leaflet.
 - Marker rendering is limited to the current bounds padded by 40%.
 - A fly-to command is emitted when follow mode or explicit recentering is requested.
-- The map type falls back to `standard` when offline so that cached OSM tiles remain usable.
+- Offline rendering switches to MapLibre with local Catalunya vector tiles. Standard, light, and dark styles work offline; satellite and terrain fall back to standard.
 
 #### User insight delivered
 
@@ -658,7 +658,7 @@ Why it is useful:
 
 - Manifest-based installability.
 - Service worker registration at app bootstrap.
-- Offline caching strategy implemented in `public/sw.js`.
+- Offline precaching configured in `vite.config.ts`; Vite PWA generates the production service worker.
 - Vite PWA plugin present in the build configuration.
 
 ### 8.5 Backend status
@@ -709,37 +709,32 @@ No API keys are required for Overpass access in the current implementation.
 - Marker virtualization by viewport is one of the most important performance controls in the app.
 - Fountain fetches are debounced by movement threshold rather than firing on every GPS update.
 - The current list view recomputes distances on render, which is acceptable for the present scale but could be memoized more aggressively if larger datasets are introduced.
-- Prewarming Catalonia map tiles improves offline usability but increases initial cache footprint.
+- Precaching all local Catalunya vector tiles improves offline usability but increases the initial download and storage footprint.
 - The app uses `preferCanvas` in Leaflet to improve rendering behavior on constrained mobile devices.
 
 ### 10.2 Offline architecture notes
 
-The service worker now performs four main jobs:
+The generated production service worker precaches the app shell, the bundled MapLibre worker, every local Catalunya vector tile, and the regional fountain JSON. It activates automatically after installation and controls open tabs. It also caches visited online OSM/CARTO tiles and Overpass GET responses for reuse; these runtime caches are not the regional offline package.
 
-- precaches a minimal app shell,
-- preloads OSM standard tiles covering Catalonia,
-- caches same-origin assets on demand,
-- caches Overpass responses for fallback reuse.
+Map data is generated locally from OSM extracts, not bulk-downloaded from public OSM tile servers. Native Capacitor builds include the files from `dist` after `npx cap sync` and do not require a service worker or a first online session. Web/PWA users need an initial connection until installation completes. Browser storage quotas and eviction can limit availability.
 
-Important boundary:
+Standard, light, and dark local styles share one tile dataset. Satellite and terrain require a connection. The source contains detail up to zoom 12; higher zoom enlarges those tiles and does not fetch extra detail. Street/place labels are not included in the current local style. The offline map is constrained to the Catalunya extract bounds.
 
-- offline map reliability is best for the standard OSM layer,
-- alternative layers such as satellite, terrain, light, and dark are not prewarmed for region-wide use,
-- deeper zoom levels beyond the preloaded range remain dependent on prior browsing or connectivity.
+Fountains are loaded from the bundled JSON and filtered by distance. Offline mode skips Overpass; straight-line guidance, pin selection, and the list remain available. Online updates, ratings, and external navigation require connectivity. Settings displays the offline package installation status.
 
 ### 10.3 Known issues and edge cases
 
 - If geolocation fails before any fix, the app falls back to Madrid. This is a safe functional fallback but not ideal for a Catalonia-focused user base.
 - The `FountainStatus` type definition and the normalized fetch status values are not perfectly aligned in the current codebase. The UI does not currently exploit those extended states, so the mismatch is not user-visible, but it is technical debt worth normalizing.
 - OSM feature tagging can be incomplete, especially for potability and operational status.
-- The app has no explicit download progress UI for offline tile prewarming.
+- Settings shows preparing/available/unavailable status, but not a byte-level download progress bar or storage management controls.
 - No automated tests currently validate the service worker or Overpass transformation logic.
 
 ### 10.4 Recommended future improvements
 
 1. Replace the Madrid fallback with a Catalonia-aware or last-known-location fallback.
 2. Add explicit offline region management with progress, storage estimation, and cache reset controls.
-3. Introduce marker clustering and possibly vector tiles for dense urban areas.
+3. Introduce marker clustering for dense urban areas; the offline map already uses vector tiles and a GPU-rendered fountain layer.
 4. Normalize the status type model so fetch-layer outputs and shared types match exactly.
 5. Add test coverage for distance calculations, Overpass normalization, and service worker request handling.
 6. Consider a curated regional fountain dataset to complement OSM in areas with incomplete tagging.

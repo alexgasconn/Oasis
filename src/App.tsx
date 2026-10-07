@@ -16,7 +16,7 @@ import { useFountains } from './hooks/useFountains';
 import { useDeviceOrientation } from './hooks/useDeviceOrientation';
 import { useWakeLock } from './hooks/useWakeLock';
 import { useHaptics } from './hooks/useHaptics';
-import { useNetworkStatus } from './hooks/useNetworkStatus';
+import { useNetworkStatus, useOfflinePackageStatus } from './hooks/useNetworkStatus';
 
 /**
  * HydrationIndicator Component
@@ -143,6 +143,8 @@ function AppContent() {
   useWakeLock(isWakeLockActive);
   const { trigger: haptic } = useHaptics();
   const isOnline = useNetworkStatus();
+  const offlinePackageStatus = useOfflinePackageStatus();
+  const effectiveMapType = !isOnline && (mapType === 'satellite' || mapType === 'terrain') ? 'standard' : mapType;
 
   const t = translations[language];
 
@@ -286,7 +288,7 @@ function AppContent() {
               fountains={fountains}
               onFountainSelect={handleFountainSelect}
               onMapClick={handleMapClick}
-              mapType={mapType}
+              mapType={effectiveMapType}
               mapCenterCommand={mapCenterCommand}
               nearestFountain={isCompassActive ? nearestFountain : null}
               isFollowMode={isFollowModeActive}
@@ -301,6 +303,8 @@ function AppContent() {
               onFountainSelect={handleFountainSelect}
               onMapClick={handleMapClick}
               mapCenterCommand={mapCenterCommand}
+              mapType={effectiveMapType}
+              nearestFountain={isCompassActive ? nearestFountain : null}
             />
           )
         ) : (
@@ -459,12 +463,16 @@ function AppContent() {
               {/* Map type – scrollable chips */}
               <div>
                 <label className="block text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{t.mapType}</label>
+                <p role="status" className="text-sm text-gray-500 mb-3">
+                  {offlinePackageStatus === 'ready' ? t.offlineReady : offlinePackageStatus === 'preparing' ? t.offlinePreparing : t.offlineUnavailable}
+                </p>
                 <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                   {mapTypeOptions.map(({ value, label }) => (
                     <button
                       key={value}
                       onClick={() => { haptic('selection'); setMapType(value); }}
-                      className={`shrink-0 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 ${mapType === value ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600'}`}
+                      disabled={!isOnline && (value === 'satellite' || value === 'terrain')}
+                      className={`shrink-0 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${effectiveMapType === value ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600'}`}
                     >
                       {label}
                     </button>

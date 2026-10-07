@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
 
 /**
  * Tracks the browser's online/offline status.
@@ -19,4 +20,26 @@ export function useNetworkStatus() {
     }, []);
 
     return isOnline;
+}
+
+export function useOfflinePackageStatus() {
+    const [status, setStatus] = useState<'preparing' | 'ready' | 'unavailable'>(() =>
+        Capacitor.isNativePlatform() ? 'ready' : 'serviceWorker' in navigator ? 'preparing' : 'unavailable'
+    );
+
+    useEffect(() => {
+        if (Capacitor.isNativePlatform() || !('serviceWorker' in navigator)) return;
+        let cancelled = false;
+        const failed = () => setStatus('unavailable');
+        window.addEventListener('offline-package-error', failed);
+        navigator.serviceWorker.ready.then(() => {
+            if (!cancelled) setStatus('ready');
+        }).catch(failed);
+        return () => {
+            cancelled = true;
+            window.removeEventListener('offline-package-error', failed);
+        };
+    }, []);
+
+    return status;
 }
